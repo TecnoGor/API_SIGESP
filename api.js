@@ -25,6 +25,8 @@ const corsOptions = {
     credentials: true,
 };
 
+//Algo
+
 class TokenManager {
     constructor() {
         this.currentToken = null;
@@ -148,6 +150,151 @@ function hashPassword(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+// async function procesarFacturaParaAPI(id_fact) {
+//     try {
+//         // 1. Consultar los detalles de la factura
+//         const result = await pool.query(
+//             `SELECT
+//                 CASE WHEN d.id_tipodetalle = 'SERVI'
+//                 THEN s.denser WHEN d.id_tipodetalle = 'ARTIC'
+//                 THEN a.denart WHEN d.id_tipodetalle = 'CONCE' 
+//                 THEN c.denconfac ELSE '' END AS dendetalle, d.* , nomfisalm, u.denunimed, u.uniabrv, f.numfact, f.fecfact, a.spi_cuenta, s.spg_cuenta,comentario, 
+//                 c.denconfac, c.scg_cuenta as scg_cuenta_conc, a.codtipcont,a.canuni,a.ctlcaja, a.codtipcont, cont.denart as dencontvac,a.codcontvac,a.contvacio,
+//                 ucont.codunimed AS codunimedcont, ucont.denunimed as denunimedcont, COALESCE(aacont.existencia,0) AS existenciacont FROM cxc_detalle d 
+//             INNER JOIN cxc_factura f ON f.id_fact = d.id_fact AND f.codproceso = d.codproceso INNER JOIN cxc_clientes cl ON cl.id_cliente = f.id_cliente 
+//                 LEFT JOIN siv_articulo a ON a.codart=d.coddetalle AND f.codemp = a.codemp AND d.id_tipodetalle = 'ARTIC' 
+//                 LEFT JOIN soc_servicios s ON s.codser=d.coddetalle AND d.id_tipodetalle = 'SERVI' 
+//                 LEFT JOIN cxc_conceptofac c ON c.codconfac=d.coddetalle AND d.id_tipodetalle = 'CONCE' 
+//                 LEFT JOIN soc_tiposervicio ts ON s.codtipser=ts.codtipser LEFT JOIN siv_unidadmedida u ON u.codunimed = d.codunimed 
+//                 LEFT JOIN siv_producto p ON p.codprod = a.codmil AND p.codemp = a.codemp LEFT JOIN siv_articuloalmacen aa ON aa.codart = a.codart 
+//             AND aa.codemp = a.codemp AND d.codalm = aa.codalm LEFT JOIN siv_almacen al ON al.codalm = aa.codalm AND al.codemp = aa.codemp 
+//                 LEFT JOIN siv_articulo cont ON cont.codemp = cont.codemp AND cont.codart = a.codcontvac AND cont.contvacio = 1 
+//                 LEFT JOIN siv_unidadmedida ucont ON ucont.codunimed = cont.codunimed LEFT JOIN siv_articuloalmacen aacont ON aacont.codart = a.codart 
+//             AND aacont.codemp = a.codemp AND al.codalm = aacont.codalm WHERE  d.codproceso='FACTURA' AND d.id_fact=$1 ORDER BY coddetalle;`,
+//             [id_fact]
+//         );
+
+//         // 2. Consultar datos adicionales del cliente y factura (necesitarás ajustar esta consulta según tu estructura)
+//         const facturaData = await pool.query(
+//             `SELECT f.*, c.nombre_cliente, c.numpririf, c.dircliente, c.telcliente, c.emailcliente
+//              FROM cxc_factura f 
+//              LEFT JOIN cxc_clientes c ON c.id_cliente = f.id_cliente 
+//              WHERE f.id_fact = $1`,
+//             [id_fact]
+//         );
+
+//         if (result.rows.length === 0 || facturaData.rows.length === 0) {
+//             throw new Error('Factura no encontrada');
+//         }
+
+//         const detalles = result.rows;
+//         const factura = facturaData.rows[0];
+
+//         // 3. Transformar los datos al formato requerido
+//          const productosTransformados = detalles.map((detalle, index) => {
+// //            console.log(`Detalle ${index}:`, detalle); // ← Para ver cada detalle
+
+//             return {
+//                 codigoProducto: detalle.coddetalle || `COD-${detalle.coddetalle || '000'}`,
+//                 nombreProducto: detalle.dendetalle || 'Producto sin nombre',
+//                 descripcionProducto: detalle.comentario || detalle.dendetalle || 'Descripción del producto',
+//                 tipoImpuesto: "G", // ← VERIFICA SI DEBE SER "G" O OTRO VALOR
+//                 cantidadAdquirida: detalle.candetalle ? parseFloat(detalle.candetalle).toFixed(2) : "1.00",
+//                 precioProducto: detalle.precio_detalle ? parseFloat(detalle.precio_detalle).toFixed(2) : "0.00",
+//                 rifTercero: "",
+//                 nombreRifTercero: ""
+//             };
+//         })
+
+//         // 4. Construir el objeto final para el endpoint
+//         const datosParaEnviar = {
+//             numeroSerie: "A",
+//             cantidadFactura: 1,
+//             facturas: [
+//                 {
+//                     numeroFactura: factura.numfact ? factura.numfact.toString().padStart(6, '0') : "000000",
+//                     documentoIdentidadCliente: "V" + factura.numpririf || "V00000000",
+//                     nombreRazonSocialCliente: factura.nombre_cliente || "Cliente no especificado",
+//                     correoCliente: factura.emailcliente || "cliente@ejemplo.com",
+//                     direccionCliente: factura.dircliente || "Dirección no especificada",
+//                     telefonoCliente: factura.telcliente || "0000000000",
+//                     descripcionFactura: `Factura ${factura.numfact} generada desde sistema`,
+//                     productos: productosTransformados,
+//                     tasa_del_dia: "199.1072", // ← MANTENIENDO EL VALOR QUE TIENES
+//                     order_payment_methods: [],
+//                     dualidad_de_moneda: 0
+//                 }
+//             ]
+//         };
+
+//         // console.log("📤 ENVIANDO DATOS COMPLETOS:");
+//         // console.log(JSON.stringify(datosParaEnviar, null, 2));
+
+//         // VERIFICAR PRODUCTOS INDIVIDUALMENTE
+//         // console.log("🔍 PRODUCTOS DETALLADOS:");
+//         // datosParaEnviar.facturas[0].productos.forEach((producto, index) => {
+//         //     console.log(`Producto ${index + 1}:`, JSON.stringify(producto, null, 2));
+//         // });
+
+//         const bearerToken = await tokenManager.getToken();
+//         //const BEARER_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzY0MDkyOTQ3LCJleHAiOjE3NjQwOTY1NDcsIm5iZiI6MTc2NDA5Mjk0NywiY2xpZW50X2lkIjoiWm9URFBNMTluOVYrbmRGVkZtRTJkQT09IiwiY2xpZW50X25hbWUiOiJJTlNUSVRVVE8gUE9TVEFMIFRFTEVHUkFGSUNPIERFIFZFTkVaVUVMQSIsImNsaWVudF90eXBlX2RvY3VtZW50X3JpZiI6IlE1MCtUZUhmXC9Zcm5MSTlPdDc4a0JnPT0iLCJjbGllbnRfcmlmIjoiQUVVSjdISHNsVDU5bzFuZHJiZFd3QT09In0.F5jOu83t8jJxkBHluTjhNRwUXExM_npSEMDGcPjfa-o';
+
+//         const response = await fetch(`${tokenManager.host}/api/Invoice/add_list_invoice`, {
+//             method: 'POST',
+//             headers: {
+//                 'Content-Type': 'application/json',
+//                 'Authorization': `Bearer ${bearerToken}`
+//             },
+//             body: JSON.stringify(datosParaEnviar)
+//         });
+
+//         const responseText = await response.text();
+//         //console.log("📥 RESPUESTA DEL API DESTINO:");
+//         //console.log("Status:", response.status);
+//         //console.log("Status Text:", response.statusText);
+//         //console.log("Headers:", response.headers);
+//         //console.log("Body:", responseText);
+
+//         if (!response.ok) {
+//             // Intentar parsear el error como JSON si es posible
+//             if (response.status === 401) {
+//                 console.log('🔄 Token expirado, renovando...');
+//                 const newToken = await tokenManager.forceRefresh();
+                
+//                 // Reintentar con nuevo token
+//                 const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_list_invoice`, {
+//                     method: 'POST',
+//                     headers: {
+//                         'Content-Type': 'application/json',
+//                         'Authorization': `Bearer ${newToken}`
+//                     },
+//                     body: JSON.stringify(datosParaEnviar)
+//                 });
+                
+//                 const retryText = await retryResponse.text();
+                
+//                 if (!retryResponse.ok) {
+//                     throw new Error(`Error después de renovar token: ${retryResponse.status} - ${retryText}`);
+//                 }
+                
+//                 return JSON.parse(retryText);
+//             }
+            
+//             throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
+//         }
+
+//         const resultadoAPI = JSON.parse(responseText);
+//         console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
+//         return resultadoAPI;
+
+//     } catch (error) {
+//         console.error('❌ ERROR COMPLETO AL PROCESAR FACTURA:');
+//         console.error('Mensaje:', error.message);
+//         console.error('Stack:', error.stack);
+//         throw error;
+//     }
+// }
+
 async function procesarFacturaParaAPI(id_fact) {
     try {
         // 1. Consultar los detalles de la factura
@@ -172,7 +319,6 @@ async function procesarFacturaParaAPI(id_fact) {
             [id_fact]
         );
 
-        // 2. Consultar datos adicionales del cliente y factura (necesitarás ajustar esta consulta según tu estructura)
         const facturaData = await pool.query(
             `SELECT f.*, c.nombre_cliente, c.numpririf, c.dircliente, c.telcliente, c.emailcliente
              FROM cxc_factura f 
@@ -188,23 +334,21 @@ async function procesarFacturaParaAPI(id_fact) {
         const detalles = result.rows;
         const factura = facturaData.rows[0];
 
-        // 3. Transformar los datos al formato requerido
-         const productosTransformados = detalles.map((detalle, index) => {
-            console.log(`Detalle ${index}:`, detalle); // ← Para ver cada detalle
-            
+        // Transformar datos
+        const productosTransformados = detalles.map((detalle) => {
             return {
                 codigoProducto: detalle.coddetalle || `COD-${detalle.coddetalle || '000'}`,
                 nombreProducto: detalle.dendetalle || 'Producto sin nombre',
                 descripcionProducto: detalle.comentario || detalle.dendetalle || 'Descripción del producto',
-                tipoImpuesto: "G", // ← VERIFICA SI DEBE SER "G" O OTRO VALOR
+                tipoImpuesto: "G",
                 cantidadAdquirida: detalle.candetalle ? parseFloat(detalle.candetalle).toFixed(2) : "1.00",
                 precioProducto: detalle.precio_detalle ? parseFloat(detalle.precio_detalle).toFixed(2) : "0.00",
                 rifTercero: "",
                 nombreRifTercero: ""
             };
-        })
+        });
 
-        // 4. Construir el objeto final para el endpoint
+        // Construir objeto para enviar
         const datosParaEnviar = {
             numeroSerie: "A",
             cantidadFactura: 1,
@@ -218,24 +362,14 @@ async function procesarFacturaParaAPI(id_fact) {
                     telefonoCliente: factura.telcliente || "0000000000",
                     descripcionFactura: `Factura ${factura.numfact} generada desde sistema`,
                     productos: productosTransformados,
-                    tasa_del_dia: "199.1072", // ← MANTENIENDO EL VALOR QUE TIENES
+                    tasa_del_dia: "199.1072",
                     order_payment_methods: [],
                     dualidad_de_moneda: 0
                 }
             ]
         };
-        
-        console.log("📤 ENVIANDO DATOS COMPLETOS:");
-        console.log(JSON.stringify(datosParaEnviar, null, 2));
-
-        // VERIFICAR PRODUCTOS INDIVIDUALMENTE
-        console.log("🔍 PRODUCTOS DETALLADOS:");
-        datosParaEnviar.facturas[0].productos.forEach((producto, index) => {
-            console.log(`Producto ${index + 1}:`, JSON.stringify(producto, null, 2));
-        });
 
         const bearerToken = await tokenManager.getToken();
-        //const BEARER_TOKEN = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzY0MDkyOTQ3LCJleHAiOjE3NjQwOTY1NDcsIm5iZiI6MTc2NDA5Mjk0NywiY2xpZW50X2lkIjoiWm9URFBNMTluOVYrbmRGVkZtRTJkQT09IiwiY2xpZW50X25hbWUiOiJJTlNUSVRVVE8gUE9TVEFMIFRFTEVHUkFGSUNPIERFIFZFTkVaVUVMQSIsImNsaWVudF90eXBlX2RvY3VtZW50X3JpZiI6IlE1MCtUZUhmXC9Zcm5MSTlPdDc4a0JnPT0iLCJjbGllbnRfcmlmIjoiQUVVSjdISHNsVDU5bzFuZHJiZFd3QT09In0.F5jOu83t8jJxkBHluTjhNRwUXExM_npSEMDGcPjfa-o';
 
         const response = await fetch(`${tokenManager.host}/api/Invoice/add_list_invoice`, {
             method: 'POST',
@@ -247,19 +381,45 @@ async function procesarFacturaParaAPI(id_fact) {
         });
 
         const responseText = await response.text();
-        console.log("📥 RESPUESTA DEL API DESTINO:");
-        console.log("Status:", response.status);
-        console.log("Status Text:", response.statusText);
-        console.log("Headers:", response.headers);
-        console.log("Body:", responseText);
+        let resultadoAPI;
 
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (e) {
+            resultadoAPI = { success: false, message: responseText };
+        }
+
+        // 🔥 IMPORTANTE: Verificar si la factura ya fue procesada
         if (!response.ok) {
-            // Intentar parsear el error como JSON si es posible
+            // Verificar si el error es porque la factura ya existe
+            const errorMsg = resultadoAPI?.message || responseText;
+            
+            if (errorMsg.includes('ya fue registrada') || 
+                errorMsg.includes('ya existe') || 
+                errorMsg.includes('already exists') ||
+                response.status === 409) { // Conflict
+                
+                console.log(`⚠️ Factura ${id_fact} ya fue procesada anteriormente`);
+                
+                // Aquí puedes:
+                // Opción 1: Devolver un objeto indicando que ya existe
+                return {
+                    success: true,
+                    message: 'Factura ya fue procesada anteriormente',
+                    already_processed: true,
+                    invoice_list_success: [], // Sin nueva factura
+                    invoice_errors: []
+                };
+                
+                // Opción 2: Intentar recuperar la URL del PDF (si tienes un endpoint para consultar)
+                // return await recuperarFacturaExistente(id_fact, factura.numfact);
+            }
+            
+            // Si es error 401, renovar token y reintentar
             if (response.status === 401) {
                 console.log('🔄 Token expirado, renovando...');
                 const newToken = await tokenManager.forceRefresh();
                 
-                // Reintentar con nuevo token
                 const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_list_invoice`, {
                     method: 'POST',
                     headers: {
@@ -281,7 +441,6 @@ async function procesarFacturaParaAPI(id_fact) {
             throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
         }
 
-        const resultadoAPI = JSON.parse(responseText);
         console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
         return resultadoAPI;
 
@@ -291,6 +450,48 @@ async function procesarFacturaParaAPI(id_fact) {
         console.error('Stack:', error.stack);
         throw error;
     }
+}
+
+// Función opcional para recuperar factura ya existente
+async function recuperarFacturaExistente(id_fact, numeroFactura) {
+    try {
+        // Aquí necesitarías un endpoint en la API destino para consultar facturas
+        // Por ejemplo: /api/Invoice/get_invoice/{numeroFactura}
+        const bearerToken = await tokenManager.getToken();
+        
+        const response = await fetch(`${tokenManager.host}/api/Invoice/get_invoice/${numeroFactura}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${bearerToken}`
+            }
+        });
+        
+        if (response.ok) {
+            const facturaExistente = await response.json();
+            return {
+                success: true,
+                message: 'Factura recuperada exitosamente',
+                already_processed: true,
+                invoice_list_success: [{
+                    invoice_number: numeroFactura,
+                    control_number: facturaExistente.control_number || '00-00000000',
+                    invoice_pdf: facturaExistente.invoice_pdf
+                }],
+                invoice_errors: []
+            };
+        }
+    } catch (error) {
+        console.error('Error recuperando factura existente:', error);
+    }
+    
+    // Si no se puede recuperar, devolver éxito parcial
+    return {
+        success: true,
+        message: 'Factura ya fue procesada anteriormente (no se pudo recuperar PDF)',
+        already_processed: true,
+        invoice_list_success: [],
+        invoice_errors: []
+    };
 }
 
 app.get('/api/testConnection', async (req, res) => {
@@ -504,7 +705,15 @@ app.get('/api/procesarFactura/:id_fact', async (req, res) => {
     try {
         // Procesar y enviar factura al endpoint destino
         const resultadoAPI = await procesarFacturaParaAPI(id_fact);
-        
+        console.log("=== DEBUG API NODE ===");
+        console.log("ID Factura:", id_fact);
+        console.log("ResultadoAPI completo:", JSON.stringify(resultadoAPI, null, 2));
+        console.log("invoice_list_success:", resultadoAPI.invoice_list_success);
+        console.log("Primer elemento:", resultadoAPI.invoice_list_success?.[0]);
+        console.log("URL del PDF:", resultadoAPI.invoice_list_success?.[0]?.invoice_pdf);
+        console.log("======================");
+	// console.log("El id de la factura es: ", id_fact);
+        // console.log(resultadoAPI);
         res.json(resultadoAPI);
 
     } catch (err) {
@@ -512,7 +721,8 @@ app.get('/api/procesarFactura/:id_fact', async (req, res) => {
         res.status(500).json({ 
             success: false,
             error: 'Error al procesar la factura',
-            detalle: err.message 
+            detalle: err.message,
+	    factura: id_fact
         });
     }
 });
