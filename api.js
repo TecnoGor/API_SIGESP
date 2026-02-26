@@ -150,6 +150,95 @@ function hashPassword(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+async function procesarNotaCredito(id_fact, id_notaCredito) {
+    try {
+        // Obtener datos de la nota de crédito desde la base de datos si es necesario
+        // const resultCodeNote = await pool.query(``); // Aquí puedes consultar los datos si los necesitas
+        
+        // Obtener token de autenticación
+        const bearerToken = await tokenManager.getToken();
+
+        // Estructura del JSON a enviar al endpoint de notas de crédito
+        const datosParaEnviar = {
+            numeroFactura: id_fact.toString(), // Número de factura a afectar
+            numeroNotaCredito: id_notaCredito.toString() // Número de nota de crédito a crear
+        };
+
+        console.log("📤 Enviando datos a API destino:", datosParaEnviar);
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${bearerToken}`
+            },
+            body: JSON.stringify(datosParaEnviar)
+        });
+
+        const responseText = await response.text();
+        let resultadoAPI;
+
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (e) {
+            resultadoAPI = { success: false, message: responseText };
+        }
+
+        if (!response.ok) {
+            // Verificar si el error es porque la nota de crédito ya existe
+            const errorMsg = resultadoAPI?.message || responseText;
+            
+            if (errorMsg.includes('ya fue registrada') || 
+                errorMsg.includes('ya existe') || 
+                errorMsg.includes('already exists') ||
+                response.status === 409) { // Conflict
+                
+                console.log(`⚠️ Nota de crédito ${id_notaCredito} para factura ${id_fact} ya fue procesada anteriormente`);
+                
+                return {
+                    success: true,
+                    message: 'Nota de crédito ya fue procesada anteriormente',
+                    already_processed: true,
+                    invoice_number_affected: id_fact,
+                    credit_note_number: id_notaCredito
+                };
+            }
+            
+            // Si es error 401, renovar token y reintentar
+            if (response.status === 401) {
+                console.log('🔄 Token expirado, renovando...');
+                const newToken = await tokenManager.forceRefresh();
+                
+                const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${newToken}`
+                    },
+                    body: JSON.stringify(datosParaEnviar)
+                });
+                
+                const retryText = await retryResponse.text();
+                
+                if (!retryResponse.ok) {
+                    throw new Error(`Error después de renovar token: ${retryResponse.status} - ${retryText}`);
+                }
+                
+                return JSON.parse(retryText);
+            }
+            
+            throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
+        }
+
+        console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
+        return resultadoAPI;
+
+    } catch (error) {
+        console.error('❌ Error en procesarNotaCredito:', error);
+        throw error;
+    }
+}
+
 async function procesarFacturaParaAPI(id_fact) {
     try {
         // 1. Consultar los detalles de la factura
@@ -551,6 +640,40 @@ app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
     } catch (err) {
         console.error('Error al transformar factura:', err);
         res.status(500).json({ error: 'Error al transformar la factura' });
+    }
+});
+
+app.get('/api/procesarNotaCredito/:id_fact/:id_notaCredito', async (req, res) => {
+    const { id_fact, id_notaCredito } = req.params;
+    
+    try {
+        console.log("📥 Recibida solicitud de nota de crédito:");
+        console.log("   - ID Factura:", id_fact);
+        console.log("   - ID Nota Crédito:", id_notaCredito);
+        
+        // Procesar y enviar nota de crédito al endpoint destino
+        const resultadoAPI = await procesarNotaCredito(id_fact, id_notaCredito);
+        
+        console.log("=== DEBUG API NODE ===");
+        console.log("ID Factura:", id_fact);
+        console.log("ID Nota Crédito:", id_notaCredito);
+        console.log("ResultadoAPI completo:", JSON.stringify(resultadoAPI, null, 2));
+        console.log("Factura afectada:", resultadoAPI.invoice_number_affected);
+        console.log("Número de control:", resultadoAPI.control_number);
+        console.log("URL del PDF:", resultadoAPI.credit_note_pdf);
+        console.log("======================");
+        
+        res.json(resultadoAPI);
+
+    } catch (err) {
+        console.error('❌ Error al procesar nota de crédito:', err);
+        res.status(500).json({ 
+            success: false,
+            error: 'Error al procesar la nota de crédito',
+            detalle: err.message,
+            factura: id_fact,
+            nota_credito: id_notaCredito
+        });
     }
 });
 
