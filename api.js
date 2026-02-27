@@ -644,19 +644,19 @@ app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
 });
 
 app.get('/api/procesarNotaCredito/:id_fact/:id_notaCredito', async (req, res) => {
-    const { id_fact, id_notaCredito } = req.params;
+    const { id_fact, id_nc } = req.params;
     
     try {
         console.log("📥 Recibida solicitud de nota de crédito:");
         console.log("   - ID Factura:", id_fact);
-        console.log("   - ID Nota Crédito:", id_notaCredito);
+        console.log("   - ID Nota Crédito:", id_nc);
         
         // Procesar y enviar nota de crédito al endpoint destino
-        const resultadoAPI = await procesarNotaCredito(id_fact, id_notaCredito);
+        const resultadoAPI = await procesarNotaCredito(id_fact, id_nc);
         
         console.log("=== DEBUG API NODE ===");
         console.log("ID Factura:", id_fact);
-        console.log("ID Nota Crédito:", id_notaCredito);
+        console.log("ID Nota Crédito:", id_nc);
         console.log("ResultadoAPI completo:", JSON.stringify(resultadoAPI, null, 2));
         console.log("Factura afectada:", resultadoAPI.invoice_number_affected);
         console.log("Número de control:", resultadoAPI.control_number);
@@ -672,7 +672,7 @@ app.get('/api/procesarNotaCredito/:id_fact/:id_notaCredito', async (req, res) =>
             error: 'Error al procesar la nota de crédito',
             detalle: err.message,
             factura: id_fact,
-            nota_credito: id_notaCredito
+            nota_credito: id_nc
         });
     }
 });
