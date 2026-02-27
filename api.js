@@ -154,7 +154,13 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
     try {
         // Obtener datos de la nota de crédito desde la base de datos si es necesario
         // const resultCodeNote = await pool.query(``); // Aquí puedes consultar los datos si los necesitas
+        if (id_fact === undefined || id_fact === null || id_fact === '') {
+            throw new Error('El ID de factura es requerido');
+        }
         
+        if (id_notaCredito === undefined || id_notaCredito === null || id_notaCredito === '') {
+            throw new Error('El ID de nota de crédito es requerido');
+        }
         // Obtener token de autenticación
         const bearerToken = await tokenManager.getToken();
 
@@ -643,7 +649,7 @@ app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
     }
 });
 
-app.get('/api/procesarNotaCredito/:id_fact/:id_notaCredito', async (req, res) => {
+app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
     const { id_fact, id_nc } = req.params;
     
     try {
