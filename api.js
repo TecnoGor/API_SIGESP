@@ -279,7 +279,7 @@ async function procesarNotaCreditoParcial(datos) {
             FROM cxc_documento doc
                 INNER JOIN cxc_dt_documento dtn ON doc.id_doc = dtn.id_doc
                 LEFT JOIN siv_articulo a ON dtn.coddetalle = a.codart
-                LEFT JOIN siv_servicio s ON dtn.coddetalle = s.codser
+                LEFT JOIN soc_servicios s ON dtn.coddetalle = s.codser
             WHERE 
                 doc.codemp = $1
                 AND
