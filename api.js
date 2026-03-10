@@ -265,6 +265,7 @@ async function procesarNotaCreditoParcial(datos) {
                 doc.numdoc,
                 doc.id_fact,
                 dtn.coddetalle,
+                dtn.cantidad_detdoc,
                 a.denart,
                 s.denser
             FROM cxc_documento doc
