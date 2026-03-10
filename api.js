@@ -48,7 +48,7 @@ class TokenManager {
     async refreshToken() {
         try {
             console.log('🔄 Solicitando nuevo token...');
-            
+
             const response = await fetch(`${this.host}/api/Invoice/create_token_authenticator`, {
                 method: 'POST',
                 headers: {
@@ -157,7 +157,7 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
         if (id_fact === undefined || id_fact === null || id_fact === '') {
             throw new Error('El ID de factura es requerido');
         }
-        
+
         if (id_notaCredito === undefined || id_notaCredito === null || id_notaCredito === '') {
             throw new Error('El ID de nota de crédito es requerido');
         }
@@ -193,14 +193,14 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
         if (!response.ok) {
             // Verificar si el error es porque la nota de crédito ya existe
             const errorMsg = resultadoAPI?.message || responseText;
-            
-            if (errorMsg.includes('ya fue registrada') || 
-                errorMsg.includes('ya existe') || 
+
+            if (errorMsg.includes('ya fue registrada') ||
+                errorMsg.includes('ya existe') ||
                 errorMsg.includes('already exists') ||
                 response.status === 409) { // Conflict
-                
+
                 console.log(`⚠️ Nota de crédito ${id_notaCredito} para factura ${id_fact} ya fue procesada anteriormente`);
-                
+
                 return {
                     success: true,
                     message: 'Nota de crédito ya fue procesada anteriormente',
@@ -209,12 +209,12 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
                     credit_note_number: id_notaCredito
                 };
             }
-            
+
             // Si es error 401, renovar token y reintentar
             if (response.status === 401) {
                 console.log('🔄 Token expirado, renovando...');
                 const newToken = await tokenManager.forceRefresh();
-                
+
                 const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note`, {
                     method: 'POST',
                     headers: {
@@ -223,16 +223,16 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
                     },
                     body: JSON.stringify(datosParaEnviar)
                 });
-                
+
                 const retryText = await retryResponse.text();
-                
+
                 if (!retryResponse.ok) {
                     throw new Error(`Error después de renovar token: ${retryResponse.status} - ${retryText}`);
                 }
-                
+
                 return JSON.parse(retryText);
             }
-            
+
             throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
         }
 
@@ -241,6 +241,151 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
 
     } catch (error) {
         console.error('❌ Error en procesarNotaCredito:', error);
+        throw error;
+    }
+}
+
+async function procesarNotaCreditoParcial(datos) {
+    try {
+        const { numfactura, id_doc, id_codemp } = datos;
+
+        if (numfactura === undefined || numfactura === null || numfactura === '') {
+            throw new Error('El ID de factura (numfactura) es requerido');
+        }
+
+        if (id_doc === undefined || id_doc === null || id_doc === '') {
+            throw new Error('El ID de nota de crédito (id_doc) es requerido');
+        }
+
+        // Consultar los datos de la nota de crédito y la factura original
+        console.log("🔍 Consultando información en Base de Datos para NC Parcial...");
+        const resultNc = await pool.query(
+            `SELECT
+                doc.coddoc,
+                doc.numdoc,
+                doc.id_fact,
+                dtn.coddetalle,
+                a.denart,
+                s.denser
+            FROM cxc_documento doc
+                INNER JOIN cxc_dt_documento dtn ON doc.id_doc = dtn.id_doc
+                LEFT JOIN siv_articulo a ON dtn.coddetalle = a.codart
+                LEFT JOIN siv_servicio s ON dtn.coddetalle = s.codser
+            WHERE 
+                doc.codemp = $1
+                AND
+                doc.id_doc = $2
+                   `,
+            [id_codemp, id_doc]
+        );
+
+        if (resultNc.rows.length === 0) {
+            console.log("⚠️ ADVERTENCIA: No se encontró la nota de crédito en la base de datos con los datos proporcionados. Se intentará enviar con los datos recibidos.");
+        } else {
+            const dataDbNc = resultNc.rows[0];
+            console.log("📄 Datos obtenidos de DB:");
+            // console.log(`   - Factura Original: ${dataDbNc.numfact_original}`);
+            console.log(`   - Nota Crédito DB: ${dataDbNc.coddoc}`);
+            console.log(`   - Articulo: ${dataDbNc.denart}`);
+            console.log(`   - Servicio: ${dataDbNc.denser}`);
+        }
+
+        // Obtener token de autenticación
+        const bearerToken = await tokenManager.getToken();
+
+        // Variable valores Nota de Credito
+        const resultadoNc = resultNc.rows.length > 0 ? resultNc.rows[0] : null;
+
+        const productosTransformados = resultNc.rows.map(row => {
+            const nombreProd = row.denart || row.denser || 'Producto/Servicio';
+            return {
+                codigo: row.coddetalle || '000',
+                cantidad: 1.00,
+                descripcion: nombreProd
+            };
+        });
+
+        const productosAEnviar = productosTransformados.length > 0 ? productosTransformados : (productos || []);
+
+        // Estructura del JSON a enviar al endpoint de notas de crédito
+        const datosParaEnviar = {
+            numeroFactura: numfactura.toString(),
+            numeroNotaCredito: resultadoNc ? resultadoNc.numdoc.toString() : id_doc.toString(),
+            productos: productosAEnviar
+        };
+
+        console.log("📤 Enviando datos a API destino (Nota Parcial):", JSON.stringify(datosParaEnviar, null, 2));
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note_with_products`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${bearerToken}`
+            },
+            body: JSON.stringify(datosParaEnviar)
+        });
+
+        const responseText = await response.text();
+        let resultadoAPI;
+
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (e) {
+            resultadoAPI = { success: false, message: responseText };
+        }
+
+        if (!response.ok) {
+            // Verificar si el error es porque la nota de crédito ya existe
+            const errorMsg = resultadoAPI?.message || responseText;
+
+            if (errorMsg.includes('ya fue registrada') ||
+                errorMsg.includes('ya existe') ||
+                errorMsg.includes('already exists') ||
+                response.status === 409) { // Conflict
+
+                const ncNumber = resultadoNc ? resultadoNc.numdoc : id_doc;
+                console.log(`⚠️ Nota de crédito parcial ${ncNumber} para factura ${numfactura} ya fue procesada anteriormente`);
+
+                return {
+                    success: true,
+                    message: 'Nota de crédito ya fue procesada anteriormente',
+                    already_processed: true,
+                    invoice_number_affected: numfactura,
+                    credit_note_number: ncNumber
+                };
+            }
+
+            // Si es error 401, renovar token y reintentar
+            if (response.status === 401) {
+                console.log('🔄 Token expirado, renovando...');
+                const newToken = await tokenManager.forceRefresh();
+
+                const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${newToken}`
+                    },
+                    body: JSON.stringify(datosParaEnviar)
+                });
+
+                const retryText = await retryResponse.text();
+
+                if (!retryResponse.ok) {
+                    throw new Error(`Error después de renovar token: ${retryResponse.status} - ${retryText}`);
+                }
+
+                return JSON.parse(retryText);
+            }
+
+            throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
+        }
+
+        console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
+        return resultadoAPI;
+
+    } catch (error) {
+        console.error('❌ Error en procesarNotaCreditoParcial:', error);
         throw error;
     }
 }
@@ -343,14 +488,14 @@ async function procesarFacturaParaAPI(id_fact) {
         if (!response.ok) {
             // Verificar si el error es porque la factura ya existe
             const errorMsg = resultadoAPI?.message || responseText;
-            
-            if (errorMsg.includes('ya fue registrada') || 
-                errorMsg.includes('ya existe') || 
+
+            if (errorMsg.includes('ya fue registrada') ||
+                errorMsg.includes('ya existe') ||
                 errorMsg.includes('already exists') ||
                 response.status === 409) { // Conflict
-                
+
                 console.log(`⚠️ Factura ${id_fact} ya fue procesada anteriormente`);
-                
+
                 // Aquí puedes:
                 // Opción 1: Devolver un objeto indicando que ya existe
                 return {
@@ -360,16 +505,16 @@ async function procesarFacturaParaAPI(id_fact) {
                     invoice_list_success: [], // Sin nueva factura
                     invoice_errors: []
                 };
-                
+
                 // Opción 2: Intentar recuperar la URL del PDF (si tienes un endpoint para consultar)
                 // return await recuperarFacturaExistente(id_fact, factura.numfact);
             }
-            
+
             // Si es error 401, renovar token y reintentar
             if (response.status === 401) {
                 console.log('🔄 Token expirado, renovando...');
                 const newToken = await tokenManager.forceRefresh();
-                
+
                 const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_list_invoice`, {
                     method: 'POST',
                     headers: {
@@ -378,16 +523,16 @@ async function procesarFacturaParaAPI(id_fact) {
                     },
                     body: JSON.stringify(datosParaEnviar)
                 });
-                
+
                 const retryText = await retryResponse.text();
-                
+
                 if (!retryResponse.ok) {
                     throw new Error(`Error después de renovar token: ${retryResponse.status} - ${retryText}`);
                 }
-                
+
                 return JSON.parse(retryText);
             }
-            
+
             throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
         }
 
@@ -408,14 +553,14 @@ async function recuperarFacturaExistente(id_fact, numeroFactura) {
         // Aquí necesitarías un endpoint en la API destino para consultar facturas
         // Por ejemplo: /api/Invoice/get_invoice/{numeroFactura}
         const bearerToken = await tokenManager.getToken();
-        
+
         const response = await fetch(`${tokenManager.host}/api/Invoice/get_invoice/${numeroFactura}`, {
             method: 'GET',
             headers: {
                 'Authorization': `Bearer ${bearerToken}`
             }
         });
-        
+
         if (response.ok) {
             const facturaExistente = await response.json();
             return {
@@ -433,7 +578,7 @@ async function recuperarFacturaExistente(id_fact, numeroFactura) {
     } catch (error) {
         console.error('Error recuperando factura existente:', error);
     }
-    
+
     // Si no se puede recuperar, devolver éxito parcial
     return {
         success: true,
@@ -447,12 +592,12 @@ async function recuperarFacturaExistente(id_fact, numeroFactura) {
 app.get('/api/testConnection', async (req, res) => {
     try {
         console.log("🔍 Probando conectividad básica...");
-        
+
         // Probar con una API pública primero
         const testResponse = await fetch('https://.org/get', {
             timeout: 10000
         });
-        
+
         if (testResponse.ok) {
             console.log("✅ Conexión a internet: OK");
         } else {
@@ -461,7 +606,7 @@ app.get('/api/testConnection', async (req, res) => {
 
         // Ahora probar con tu API específica
         console.log("🔍 Probando conexión a tu API destino...");
-        
+
         const BEARER_TOKEN = "tu_token_real_aqui";
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 15000);
@@ -474,24 +619,24 @@ app.get('/api/testConnection', async (req, res) => {
                 },
                 signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
             console.log("✅ Conexión a tu API: OK - Status:", yourApiResponse.status);
             const responseText = await yourApiResponse.text();
             console.log("🎯 TEST SIMPLE - Respuesta:");
             console.log("Status:", responseText.status);
             console.log("Body:", responseText);
-            
+
             res.json({
                 internet: 'OK',
                 your_api: `OK - Status ${yourApiResponse.status}`,
                 message: 'Conexiones funcionando'
             });
-            
+
         } catch (apiError) {
             clearTimeout(timeoutId);
             console.log("❌ Conexión a tu API: FALLÓ -", apiError.message);
-            
+
             res.json({
                 internet: 'OK',
                 your_api: `FALLÓ - ${apiError.message}`,
@@ -501,8 +646,8 @@ app.get('/api/testConnection', async (req, res) => {
 
     } catch (error) {
         console.error('❌ Error en test de conexión:', error.message);
-        res.status(500).json({ 
-            error: 'Error general: ' + error.message 
+        res.status(500).json({
+            error: 'Error general: ' + error.message
         });
     }
 });
@@ -526,7 +671,7 @@ app.post('/api/token/refresh', async (req, res) => {
     try {
         const newToken = await tokenManager.forceRefresh();
         const status = tokenManager.getTokenStatus();
-        
+
         res.json({
             success: true,
             message: 'Token renovado manualmente',
@@ -543,7 +688,7 @@ app.post('/api/token/refresh', async (req, res) => {
 app.get('/api/testSimple/:id_fact', async (req, res) => {
     try {
         const { id_fact } = req.params;
-        
+
         // Datos MUY básicos para probar
         const datosParaEnviar = {
             numeroSerie: 'A',
@@ -580,13 +725,13 @@ app.get('/api/testSimple/:id_fact', async (req, res) => {
         console.log(JSON.stringify(datosParaEnviar, null, 2));
 
         const BEARER_TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzY0MDkyOTQ3LCJleHAiOjE3NjQwOTY1NDcsIm5iZiI6MTc2NDA5Mjk0NywiY2xpZW50X2lkIjoiWm9URFBNMTluOVYrbmRGVkZtRTJkQT09IiwiY2xpZW50X25hbWUiOiJJTlNUSVRVVE8gUE9TVEFMIFRFTEVHUkFGSUNPIERFIFZFTkVaVUVMQSIsImNsaWVudF90eXBlX2RvY3VtZW50X3JpZiI6IlE1MCtUZUhmXC9Zcm5MSTlPdDc4a0JnPT0iLCJjbGllbnRfcmlmIjoiQUVVSjdISHNsVDU5bzFuZHJiZFd3QT09In0.F5jOu83t8jJxkBHluTjhNRwUXExM_npSEMDGcPjfa-o"; // ← ¡REEMPLAZA!
-        
+
         // AGREGAR MÁS CONFIGURACIÓN A FETCH
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 segundos timeout
 
         console.log("🔗 Intentando conectar a la API destino...");
-        
+
         const response = await fetch('https://calidad.cgimprenta.digital/api/Invoice/add_list_invoice', {
             method: 'POST',
             headers: {
@@ -622,14 +767,14 @@ app.get('/api/testSimple/:id_fact', async (req, res) => {
         console.error('Tipo de error:', error.name);
         console.error('Mensaje:', error.message);
         console.error('Código:', error.code);
-        
+
         if (error.name === 'AbortError') {
-            return res.status(408).json({ 
-                error: 'Timeout: La conexión tardó demasiado tiempo' 
+            return res.status(408).json({
+                error: 'Timeout: La conexión tardó demasiado tiempo'
             });
         }
-        
-        res.status(500).json({ 
+
+        res.status(500).json({
             error: 'Error de conexión: ' + error.message,
             type: error.name,
             code: error.code
@@ -639,7 +784,7 @@ app.get('/api/testSimple/:id_fact', async (req, res) => {
 
 app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
-    
+
     try {
         const datosTransformados = await procesarFacturaParaAPI(id_fact);
         res.json(datosTransformados);
@@ -651,15 +796,15 @@ app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
 
 app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
     const { id_fact, id_nc } = req.params;
-    
+
     try {
         console.log("📥 Recibida solicitud de nota de crédito:");
         console.log("   - ID Factura:", id_fact);
         console.log("   - ID Nota Crédito:", id_nc);
-        
+
         // Procesar y enviar nota de crédito al endpoint destino
         const resultadoAPI = await procesarNotaCredito(id_fact, id_nc);
-        
+
         console.log("=== DEBUG API NODE ===");
         console.log("ID Factura:", id_fact);
         console.log("ID Nota Crédito:", id_nc);
@@ -668,12 +813,12 @@ app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
         console.log("Número de control:", resultadoAPI.control_number);
         console.log("URL del PDF:", resultadoAPI.credit_note_pdf);
         console.log("======================");
-        
+
         res.json(resultadoAPI);
 
     } catch (err) {
         console.error('❌ Error al procesar nota de crédito:', err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al procesar la nota de crédito',
             detalle: err.message,
@@ -683,9 +828,38 @@ app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
     }
 });
 
+app.post('/api/procesarNotaCreditoParcial', async (req, res) => {
+    try {
+        const datos = req.body;
+        console.log("📥 Recibida solicitud de nota de crédito parcial:");
+        console.log("  - Payload:", JSON.stringify(datos, null, 2));
+
+        // Procesar y enviar nota de crédito parcial al endpoint destino
+        const resultadoAPI = await procesarNotaCreditoParcial(datos);
+
+        console.log("=== DEBUG API NODE ===");
+        console.log("ResultadoAPI completo:", JSON.stringify(resultadoAPI, null, 2));
+        console.log("Factura afectada:", resultadoAPI.invoice_number_affected);
+        console.log("Número de control:", resultadoAPI.control_number);
+        console.log("URL del PDF:", resultadoAPI.credit_note_pdf);
+        console.log("======================");
+
+        res.json(resultadoAPI);
+
+    } catch (err) {
+        console.error('❌ Error al procesar nota de crédito parcial:', err);
+        res.status(500).json({
+            success: false,
+            error: 'Error al procesar la nota de crédito parcial',
+            detalle: err.message,
+            datos_enviados: req.body
+        });
+    }
+});
+
 app.get('/api/procesarFactura/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
-    
+
     try {
         // Procesar y enviar factura al endpoint destino
         const resultadoAPI = await procesarFacturaParaAPI(id_fact);
@@ -696,17 +870,17 @@ app.get('/api/procesarFactura/:id_fact', async (req, res) => {
         console.log("Primer elemento:", resultadoAPI.invoice_list_success?.[0]);
         console.log("URL del PDF:", resultadoAPI.invoice_list_success?.[0]?.invoice_pdf);
         console.log("======================");
-	// console.log("El id de la factura es: ", id_fact);
+        // console.log("El id de la factura es: ", id_fact);
         // console.log(resultadoAPI);
         res.json(resultadoAPI);
 
     } catch (err) {
         console.error('Error al procesar factura:', err);
-        res.status(500).json({ 
+        res.status(500).json({
             success: false,
             error: 'Error al procesar la factura',
             detalle: err.message,
-	    factura: id_fact
+            factura: id_fact
         });
     }
 });
@@ -747,7 +921,7 @@ app.get('/api/facturaDP/:id_fact', async (req, res) => {
             AND f.id_fact=$1`,
             [parseInt(id_fact)] // ID del rol médico (ajusta según tu base de datos)
         );
-        
+
         res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener la factura:', err);
@@ -758,7 +932,7 @@ app.get('/api/facturaDP/:id_fact', async (req, res) => {
 app.get('/api/facturaD/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
     try {
-        const result = await pool .query(
+        const result = await pool.query(
             `SELECT
                 CASE WHEN d.id_tipodetalle = 'SERVI'
                 THEN s.denser WHEN d.id_tipodetalle = 'ARTIC'
@@ -778,7 +952,7 @@ app.get('/api/facturaD/:id_fact', async (req, res) => {
             AND aacont.codemp = a.codemp AND al.codalm = aacont.codalm WHERE  d.codproceso='FACTURA' AND d.id_fact=$1 ORDER BY coddetalle;`,
             [id_fact] // ID del rol médico (ajusta según tu base de datos)
         );
-        
+
         res.json(result.rows);
     } catch (err) {
         console.error('Error al obtener médicos:', err);
@@ -931,7 +1105,7 @@ app.post('/api/regCargos', async (req, res) => {
 
 app.post('/api/regComprobante', async (req, res) => {
     const {
-        codemp, procede, comprobante, fecha, descripcion, tipo_comp, tipo_destino, cod_pro, 
+        codemp, procede, comprobante, fecha, descripcion, tipo_comp, tipo_destino, cod_pro,
         ced_bene, total, codban, ctaban, estrenfon, codfuefin, codusu
     } = req.body;
 
