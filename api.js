@@ -249,6 +249,8 @@ async function procesarNotaCreditoParcial(datos) {
     try {
         const { numfactura, id_doc, id_codemp } = datos;
 
+        const cod_emp = "0001" || id_codemp;
+
         console.log("=== DEBUG NODE.JS ===");
         console.log("Datos recibidos:", JSON.stringify(datos, null, 2));
         console.log("numfactura:", numfactura, "tipo:", typeof numfactura);
@@ -284,7 +286,7 @@ async function procesarNotaCreditoParcial(datos) {
                 doc.codemp = $1
                 AND
                 doc.id_doc = $2`,
-            [id_codemp, id_doc]
+            [cod_emp, id_doc]
         );
 
         console.log("Resultado query - filas:", resultNc.rows.length);
