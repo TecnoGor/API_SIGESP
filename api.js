@@ -249,6 +249,12 @@ async function procesarNotaCreditoParcial(datos) {
     try {
         const { numfactura, id_doc, id_codemp } = datos;
 
+        console.log("=== DEBUG NODE.JS ===");
+        console.log("Datos recibidos:", JSON.stringify(datos, null, 2));
+        console.log("numfactura:", numfactura, "tipo:", typeof numfactura);
+        console.log("id_doc:", id_doc, "tipo:", typeof id_doc);
+        console.log("id_codemp:", id_codemp, "tipo:", typeof id_codemp);
+
         if (numfactura === undefined || numfactura === null || numfactura === '') {
             throw new Error('El ID de factura (numfactura) es requerido');
         }
@@ -257,8 +263,10 @@ async function procesarNotaCreditoParcial(datos) {
             throw new Error('El ID de nota de crédito (id_doc) es requerido');
         }
 
-        // Consultar los datos de la nota de crédito y la factura original
-        console.log("🔍 Consultando información en Base de Datos para NC Parcial...");
+        // Consultar los datos de la nota de crédito
+        console.log("🔍 Consultando Base de Datos...");
+        console.log("Query params:", [id_codemp, id_doc]);
+        
         const resultNc = await pool.query(
             `SELECT
                 doc.coddoc,
@@ -275,21 +283,34 @@ async function procesarNotaCreditoParcial(datos) {
             WHERE 
                 doc.codemp = $1
                 AND
-                doc.id_doc = $2
-                   `,
+                doc.id_doc = $2`,
             [id_codemp, id_doc]
         );
 
-        if (resultNc.rows.length === 0) {
-            console.log("⚠️ ADVERTENCIA: No se encontró la nota de crédito en la base de datos con los datos proporcionados. Se intentará enviar con los datos recibidos.");
+        console.log("Resultado query - filas:", resultNc.rows.length);
+        if (resultNc.rows.length > 0) {
+            console.log("Primera fila:", JSON.stringify(resultNc.rows[0], null, 2));
         } else {
-            const dataDbNc = resultNc.rows[0];
-            console.log("📄 Datos obtenidos de DB:");
-            // console.log(`   - Factura Original: ${dataDbNc.numfact_original}`);
-            console.log(`   - Nota Crédito DB: ${dataDbNc.coddoc}`);
-            console.log(`   - Articulo: ${dataDbNc.denart}`);
-            console.log(`   - Servicio: ${dataDbNc.denser}`);
+            console.log("⚠️ No se encontraron resultados en BD");
+            
+            // Verificar si la tabla tiene datos
+            const verificar = await pool.query(
+                `SELECT COUNT(*) as total FROM cxc_documento WHERE codemp = $1`,
+                [id_codemp]
+            );
+            console.log("Total documentos en BD para empresa", id_codemp, ":", verificar.rows[0].total);
+            
+            // Verificar específicamente este id_doc
+            const verificarDoc = await pool.query(
+                `SELECT * FROM cxc_documento WHERE id_doc = $1`,
+                [id_doc]
+            );
+            console.log("Documento específico encontrado:", verificarDoc.rows.length);
+            if (verificarDoc.rows.length > 0) {
+                console.log("Documento:", JSON.stringify(verificarDoc.rows[0], null, 2));
+            }
         }
+
 
         // Obtener token de autenticación
         const bearerToken = await tokenManager.getToken();
@@ -832,27 +853,25 @@ app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
 app.post('/api/procesarNotaCreditoParcial', async (req, res) => {
     try {
         const datos = req.body;
-        console.log("📥 Recibida solicitud de nota de crédito parcial:");
-        console.log("  - Payload:", JSON.stringify(datos, null, 2));
-
-        // Procesar y enviar nota de crédito parcial al endpoint destino
+        console.log("📥 ENDPOINT NODE - Recibida solicitud:");
+        console.log("Headers:", req.headers);
+        console.log("Body:", JSON.stringify(datos, null, 2));
+        
         const resultadoAPI = await procesarNotaCreditoParcial(datos);
-
-        console.log("=== DEBUG API NODE ===");
-        console.log("ResultadoAPI completo:", JSON.stringify(resultadoAPI, null, 2));
-        console.log("Factura afectada:", resultadoAPI.invoice_number_affected);
-        console.log("Número de control:", resultadoAPI.control_number);
-        console.log("URL del PDF:", resultadoAPI.credit_note_pdf);
-        console.log("======================");
-
+        
+        console.log("✅ Respuesta exitosa:", JSON.stringify(resultadoAPI, null, 2));
         res.json(resultadoAPI);
-
+        
     } catch (err) {
-        console.error('❌ Error al procesar nota de crédito parcial:', err);
+        console.error('❌ Error en endpoint:', err);
+        console.error('Stack:', err.stack);
+        
+        // Enviar respuesta de error detallada
         res.status(500).json({
             success: false,
             error: 'Error al procesar la nota de crédito parcial',
             detalle: err.message,
+            stack: err.stack,
             datos_enviados: req.body
         });
     }
