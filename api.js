@@ -247,15 +247,15 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
 
 async function procesarNotaCreditoParcial(datos) {
     try {
-        const { numfactura, id_doc, id_codemp } = datos;
+        const { numfactura, id_doc } = datos;
 
-        const cod_emp = "0001" || id_codemp;
+        const cod_emp = "0001";
 
         console.log("=== DEBUG NODE.JS ===");
         console.log("Datos recibidos:", JSON.stringify(datos, null, 2));
         console.log("numfactura:", numfactura, "tipo:", typeof numfactura);
         console.log("id_doc:", id_doc, "tipo:", typeof id_doc);
-        console.log("id_codemp:", id_codemp, "tipo:", typeof id_codemp);
+        // console.log("id_codemp:", id_codemp, "tipo:", typeof id_codemp);
 
         if (numfactura === undefined || numfactura === null || numfactura === '') {
             throw new Error('El ID de factura (numfactura) es requerido');
@@ -267,7 +267,7 @@ async function procesarNotaCreditoParcial(datos) {
 
         // Consultar los datos de la nota de crédito
         console.log("🔍 Consultando Base de Datos...");
-        console.log("Query params:", [id_codemp, id_doc]);
+        console.log("Query params:", [id_doc]);
         
         const resultNc = await pool.query(
             `SELECT
@@ -298,9 +298,9 @@ async function procesarNotaCreditoParcial(datos) {
             // Verificar si la tabla tiene datos
             const verificar = await pool.query(
                 `SELECT COUNT(*) as total FROM cxc_documento WHERE codemp = $1`,
-                [id_codemp]
+                [cod_emp]
             );
-            console.log("Total documentos en BD para empresa", id_codemp, ":", verificar.rows[0].total);
+            console.log("Total documentos en BD para empresa", cod_emp, ":", verificar.rows[0].total);
             
             // Verificar específicamente este id_doc
             const verificarDoc = await pool.query(
@@ -384,7 +384,7 @@ async function procesarNotaCreditoParcial(datos) {
                 console.log('🔄 Token expirado, renovando...');
                 const newToken = await tokenManager.forceRefresh();
 
-                const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note`, {
+                const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/add_credit_note_with_products`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -405,7 +405,7 @@ async function procesarNotaCreditoParcial(datos) {
             throw new Error(`Error en API destino: ${response.status} - ${responseText}`);
         }
 
-        console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
+        // console.log("✅ RESPUESTA EXITOSA:", resultadoAPI);
         return resultadoAPI;
 
     } catch (error) {
