@@ -334,7 +334,7 @@ async function procesarNotaCreditoParcial(datos) {
         // Estructura del JSON a enviar al endpoint de notas de crédito
         const datosParaEnviar = {
             numeroFactura: numfactura.toString(),
-            numeroNotaCredito: resultadoNc ? resultadoNc.numdoc.toString() : id_doc.toString(),
+            numeroNotaCredito: resultadoNc ? resultadoNc.coddoc.toString() : id_doc.toString(),
             productos: productosAEnviar
         };
 
@@ -367,7 +367,7 @@ async function procesarNotaCreditoParcial(datos) {
                 errorMsg.includes('already exists') ||
                 response.status === 409) { // Conflict
 
-                const ncNumber = resultadoNc ? resultadoNc.numdoc : id_doc;
+                const ncNumber = resultadoNc ? resultadoNc.coddoc : id_doc;
                 console.log(`⚠️ Nota de crédito parcial ${ncNumber} para factura ${numfactura} ya fue procesada anteriormente`);
 
                 return {
