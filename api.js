@@ -414,6 +414,27 @@ async function procesarNotaCreditoParcial(datos) {
     }
 }
 
+function procesarAlicuota(a) {
+    const porcentajeIVA = parseInt(a);
+    var alicuota = "E";
+
+    if (porcentajeIVA === 16) {
+        alicuota = "G";
+        return alicuota;        
+    } else if (porcentajeIVA === 8) {
+        alicuota = "R";
+        return alicuota;
+    } else if (porcentajeIVA === 31) {
+        alicuota = "A";
+        return alicuota;
+    } else {
+        alicuota = "E";
+        return alicuota;
+        
+    }
+
+}
+
 async function procesarFacturaParaAPI(id_fact) {
     try {
         // 1. Consultar los detalles de la factura
@@ -458,9 +479,9 @@ async function procesarFacturaParaAPI(id_fact) {
             return {
                 codigoProducto: detalle.coddetalle || `COD-${detalle.coddetalle || '000'}`,
                 nombreProducto: detalle.dendetalle || 'Producto sin nombre',
-                descripcionProducto: detalle.comentario || detalle.dendetalle || 'Descripción del producto',
-                tipoImpuesto: "G",
-                cantidadAdquirida: detalle.candetalle ? parseFloat(detalle.candetalle).toFixed(2) : "1.00",
+                descripcionProducto: detalle.dendetalle + detalle.comentario || 'Descripción del producto',
+                tipoImpuesto: procesarAlicuota(detalle.porciva) || "G",
+                cantidadAdquirida: detalle.cantidad_detalle ? parseFloat(detalle.cantidad_detalle).toFixed(2) : "1.00",
                 precioProducto: detalle.precio_detalle ? parseFloat(detalle.precio_detalle).toFixed(2) : "0.00",
                 rifTercero: "",
                 nombreRifTercero: ""
