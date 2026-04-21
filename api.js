@@ -150,6 +150,233 @@ function hashPassword(password) {
     return crypto.createHash('sha256').update(password).digest('hex');
 }
 
+async function registrarFacturaSigesp(datos) {
+    const { 
+        cod_cliente, 
+        fecha_factura, 
+        hora, 
+        subtot, 
+        iva, 
+        tot, 
+        base_imp, 
+        usuario,
+        cedula_beneficiario = 'J404864717',
+        porcentaje_iva = 16,
+        cuenta_iva = '2149901010002',
+        cuenta_cobrar = '1120301000001',
+        cuenta_ingreso = '304990100',
+        partida_ingreso = '304990100',
+        descripcion_adicional = ''
+    } = datos;
+
+    const client = await pool.connect();
+
+    try {
+        await client.query('BEGIN');
+
+        // 1. OBTENER EL ÚLTIMO NÚMERO DE FACTURA
+        const ultimaFactura = await client.query(`
+            SELECT COALESCE(MAX(id_fact), 0) as max_id, 
+                   COALESCE(MAX(CAST(codfact AS INTEGER)), 0) as max_codfact
+            FROM public.cxc_factura 
+            WHERE codemp = '0001' AND codproceso = 'FACTURA'
+        `);
+        
+        const nuevoIdFact = ultimaFactura.rows[0].max_id + 1;
+        const nuevoCodFact = (ultimaFactura.rows[0].max_codfact + 1).toString().padStart(6, '0');
+        
+        // 2. GENERAR NÚMERO DE COMPROBANTE (numcont)
+        const añoActual = new Date(fecha_factura).getFullYear().toString().slice(-2);
+        
+        const ultimoComprobante = await client.query(`
+            SELECT MAX(numcont) as max_numcont
+            FROM public.cxc_factura 
+            WHERE codemp = '0001' AND numcont LIKE $1
+        `, [`${añoActual}-%`]);
+        
+        let nuevoNumCont;
+        if (ultimoComprobante.rows[0].max_numcont) {
+            const ultimoNumero = parseInt(ultimoComprobante.rows[0].max_numcont.split('-')[1]);
+            const siguienteNumero = (ultimoNumero + 1).toString().padStart(7, '0');
+            nuevoNumCont = `${añoActual}-${siguienteNumero}`;
+        } else {
+            nuevoNumCont = `${añoActual}-0000001`;
+        }
+        
+        // 3. GENERAR NÚMERO DE COMPROBANTE PARA SIGESP
+        const numComprobanteSigesp = `F-${nuevoIdFact}-${nuevoCodFact}`;
+
+        console.log(`📄 Generando factura: ID=${nuevoIdFact}, Código=${nuevoCodFact}, Comprobante=${nuevoNumCont}`);
+
+        // 4. INSERTAR FACTURA PRINCIPAL
+        const insertFact = await client.query(`
+            INSERT INTO public.cxc_factura 
+                (id_fact, codemp, codproceso, numfact, codfact, numcont, 
+                 id_cliente, id_transp, id_estfact, id_condpago, id_vend, 
+                 codmon, tascam, tipopecont, codcaj, fecfact, fecvenc, 
+                 porcdesc, montodesc, saldo, subtot, iva, otros, baseimp, 
+                 total, descripfact, comentadifact, nummov, numorddes, 
+                 codestpro1, codestpro2, codestpro3, codestpro4, codestpro5, 
+                 estcla, devengado, cobrado, contabilizado, anulado, 
+                 fecconta, feccob, fecanula, conanula, fecreg, usureg, 
+                 horareg, fecmod, usumod, horamod, codunieje, codsuc, 
+                 fecciecxc, cxchist, estdesp, id_cliente_doc, procefac, 
+                 impresofac, gencomision, genpromocion, codsuccli, noafecfact) 
+            VALUES 
+                ($1, '0001', 'FACTURA', $1, $2, $3,
+                 $4, '10', '4', '7', '1', '001', '1', 'DEV', '0001',
+                 $5, $5, '0', '0', '0', $6, $7, '0', $9, $8,
+                 '', '', NULL, NULL,
+                 '-------------------------', '-------------------------',
+                 '-------------------------', '-------------------------',
+                 '-------------------------', '-', '1', '1', '0', '0',
+                 NULL, NULL, NULL, NULL, $5, $10, $11,
+                 NULL, NULL, NULL, '----------', '0001', $5,
+                 '0', 'PEND', '0', 'CXCFAC', '0', '0', '0', '', '0')
+        `, [nuevoIdFact, nuevoCodFact, nuevoNumCont, cod_cliente, fecha_factura, 
+            subtot, iva, tot, base_imp, usuario, hora]);
+
+        // 5. INSERTAR DETALLE DE CARGOS (IVA)
+        const insertCargos = await client.query(`
+            INSERT INTO public.cxc_dt_cargos 
+                (codemp, id_fact, codproceso, codcar, formula, porcar, 
+                 monbasimp, monimp, montot, scg_cuenta, spi_cuenta, 
+                 codestpro1, codestpro2, codestpro3, codestpro4, codestpro5, 
+                 estcla, id_doc) 
+            VALUES 
+                ('0001', $1, 'FACTURA', '00079', '$LD_MONTO*0.16', $2, 
+                 $3, $4, $5, $6, '', 
+                 '-------------------------', '-------------------------', 
+                 '-------------------------', '-------------------------', 
+                 '-------------------------', '-', 0)
+        `, [nuevoIdFact, porcentaje_iva, subtot, iva, tot, cuenta_iva]);
+
+        // 6. INSERTAR COMPROBANTE PRINCIPAL (sigesp_cmp)
+        const insertComprobante = await client.query(`
+            INSERT INTO sigesp_cmp 
+                (codemp, procede, comprobante, fecha, descripcion, 
+                 tipo_comp, tipo_destino, cod_pro, ced_bene, total, 
+                 codban, ctaban, estrenfon, codfuefin, codusu) 
+            VALUES 
+                ('0001', 'CXCFAC', $1, $2, $3, 
+                 1, 'B', '----------', $4, $5, 
+                 0, '---', '-------------------------', '0', $6)
+        `, [numComprobanteSigesp, fecha_factura, `FACTURA N° ${nuevoIdFact} ${descripcion_adicional}`,
+            cedula_beneficiario, tot, usuario]);
+
+        // 7. INSERTAR DETALLE PRESUPUESTARIO (spi_dt_cmp)
+        const insertSpiDt = await client.query(`
+            INSERT INTO spi_dt_cmp 
+                (codemp, procede, comprobante, fecha, spi_cuenta, 
+                 procede_doc, documento, operacion, descripcion, 
+                 monto, orden, codban, ctaban, estcla, 
+                 codestpro1, codestpro2, codestpro3, codestpro4, codestpro5) 
+            VALUES 
+                ('0001', 'CXCFAC', $1, $2, $3, 
+                 'CXCFAC', $1, 'DEV', $4, 
+                 $5, 1, '---', '-------------------------', '-', 
+                 '-------------------------', '-------------------------', 
+                 '-------------------------', '-------------------------', '-------------------------')
+        `, [numComprobanteSigesp, fecha_factura, partida_ingreso, 
+            `FACTURA N° ${nuevoIdFact}`, subtot]);
+
+        // 8. INSERTAR DETALLE CONTABLE (scg_dt_cmp) - Cuenta por Cobrar (Débito)
+        const insertScgDtDebito = await client.query(`
+            INSERT INTO scg_dt_cmp 
+                (codemp, procede, comprobante, fecha, sc_cuenta, 
+                 procede_doc, documento, debhab, descripcion, 
+                 monto, orden, codban, ctaban) 
+            VALUES 
+                ('0001', 'CXCFAC', $1, $2, $3, 
+                 'CXCFAC', $1, 'D', $4, 
+                 $5, 0, '---', '-------------------------')
+        `, [numComprobanteSigesp, fecha_factura, cuenta_cobrar, 
+            `FACTURA N° ${nuevoIdFact}`, tot]);
+
+        // 9. INSERTAR DETALLE CONTABLE (scg_dt_cmp) - Cuenta de Ingreso (Crédito)
+        const insertScgDtCredito = await client.query(`
+            INSERT INTO scg_dt_cmp 
+                (codemp, procede, comprobante, fecha, sc_cuenta, 
+                 procede_doc, documento, debhab, descripcion, 
+                 monto, orden, codban, ctaban) 
+            VALUES 
+                ('0001', 'CXCFAC', $1, $2, $3, 
+                 'CXCFAC', $1, 'H', $4, 
+                 $5, 1, '---', '-------------------------')
+        `, [numComprobanteSigesp, fecha_factura, cuenta_ingreso, 
+            `FACTURA N° ${nuevoIdFact}`, subtot]);
+
+        // 10. INSERTAR DETALLE CONTABLE (scg_dt_cmp) - IVA por Pagar (Crédito)
+        const insertScgDtIva = await client.query(`
+            INSERT INTO scg_dt_cmp 
+                (codemp, procede, comprobante, fecha, sc_cuenta, 
+                 procede_doc, documento, debhab, descripcion, 
+                 monto, orden, codban, ctaban) 
+            VALUES 
+                ('0001', 'CXCFAC', $1, $2, $3, 
+                 'CXCFAC', $1, 'H', $4, 
+                 $5, 2, '---', '-------------------------')
+        `, [numComprobanteSigesp, fecha_factura, cuenta_iva, 
+            `FACTURA N° ${nuevoIdFact} - IVA`, iva]);
+
+        await client.query('COMMIT');
+
+        console.log(`✅ Factura ${nuevoIdFact} registrada exitosamente`);
+
+        // 11. PROCESAR FACTURA PARA OBTENER LINK
+        let linkFactura = null;
+        try {
+            console.log(`🔄 Procesando factura ${nuevoIdFact} para obtener link...`);
+            
+            // Llamar a la función procesarFacturaParaAPI con el ID de la factura
+            const resultadoProcesamiento = await procesarFacturaParaAPI(nuevoIdFact);
+            
+            if (resultadoProcesamiento && resultadoProcesamiento.success) {
+                linkFactura = resultadoProcesamiento.link || resultadoProcesamiento.data?.link;
+                console.log(`✅ Link generado para factura ${nuevoIdFact}: ${linkFactura}`);
+            } else {
+                console.warn(`⚠️ No se pudo generar el link para la factura ${nuevoIdFact}:`, resultadoProcesamiento?.message);
+            }
+        } catch (errorProcesamiento) {
+            console.error(`❌ Error al procesar factura ${nuevoIdFact} para API:`, errorProcesamiento);
+            // No lanzamos el error para que no revierta la transacción
+            // La factura ya está registrada, solo falló la generación del link
+        }
+
+        return {
+            success: true,
+            message: 'Factura registrada exitosamente con todos sus componentes',
+            data: {
+                factura: {
+                    id_fact: nuevoIdFact,
+                    codfact: nuevoCodFact,
+                    numcont: nuevoNumCont,
+                    comprobante_sigesp: numComprobanteSigesp,
+                    link_factura: linkFactura
+                },
+                detalles: {
+                    monto_bruto: subtot,
+                    iva: iva,
+                    total: tot
+                }
+            }
+        };
+
+    } catch (error) {
+        await client.query('ROLLBACK');
+        console.error('Error al registrar factura en SIGESP:', error);
+        
+        return {
+            success: false,
+            message: 'Error al registrar la factura',
+            error: error.message,
+            detalle: error.stack
+        };
+    } finally {
+        client.release();
+    }
+}
+
 async function procesarNotaCredito(id_fact, id_notaCredito) {
     try {
         // Obtener datos de la nota de crédito desde la base de datos si es necesario
@@ -896,6 +1123,59 @@ app.post('/api/procesarNotaCreditoParcial', async (req, res) => {
             detalle: err.message,
             stack: err.stack,
             datos_enviados: req.body
+        });
+    }
+});
+
+//ENDPOINT para SIGESP
+
+app.post('/api/registrarFacturaSigespCG', async (req, res) => {
+    try {
+        const datos = req.body;
+
+        // Validar que los datos necesarios estén presentes
+        const camposRequeridos = ['cod_cliente', 'fecha_factura', 'hora', 'subtot', 'iva', 'tot', 'base_imp', 'usuario'];
+        const camposFaltantes = camposRequeridos.filter(campo => !datos[campo]);
+        
+        if (camposFaltantes.length > 0) {
+            return res.status(400).json({
+                success: false,
+                error: 'Faltan campos requeridos',
+                campos_faltantes: camposFaltantes
+            });
+        }
+
+        console.log("📝 Body recibido:", JSON.stringify(datos, null, 2));
+
+        const resultRegFact = await registrarFacturaSigesp(datos);
+
+        console.log("✅ Resultado:", resultRegFact);
+
+        // Verificar si la operación fue exitosa
+        if (resultRegFact.success) {
+            return res.status(201).json({
+                success: true,
+                message: resultRegFact.message,
+                data: resultRegFact.data
+            });
+        } else {
+            return res.status(400).json({
+                success: false,
+                message: resultRegFact.message,
+                error: resultRegFact.error
+            });
+        }
+
+    } catch (err) {
+        console.error('❌ Error en endpoint:', err);
+        console.error('Stack:', err.stack);
+        
+        // Enviar respuesta de error
+        res.status(500).json({
+            success: false,
+            error: 'Error interno al procesar la solicitud',
+            detalle: err.message,
+            stack: process.env.NODE_ENV === 'development' ? err.stack : undefined
         });
     }
 });
