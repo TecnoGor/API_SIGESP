@@ -390,11 +390,34 @@ async function procesarNotaCredito(id_fact, id_notaCredito) {
         }
         // Obtener token de autenticación
         const bearerToken = await tokenManager.getToken();
+        const cod_emp = "0001";
+
+        const resultNc = await pool.query(
+            `SELECT
+                doc.coddoc,
+                doc.numdoc,
+                doc.id_fact,
+                dtn.coddetalle,
+                dtn.cantidad_detdoc,
+                a.denart,
+                s.denser
+            FROM cxc_documento doc
+                INNER JOIN cxc_dt_documento dtn ON doc.id_doc = dtn.id_doc
+                LEFT JOIN siv_articulo a ON dtn.coddetalle = a.codart
+                LEFT JOIN soc_servicios s ON dtn.coddetalle = s.codser
+            WHERE 
+                doc.codemp = $1
+                AND
+                doc.id_doc = $2`,
+            [cod_emp, id_notaCredito]
+        );
+
+        const resultadoNc = resultNc.rows.length > 0 ? resultNc.rows[0] : null;
 
         // Estructura del JSON a enviar al endpoint de notas de crédito
         const datosParaEnviar = {
             numeroFactura: id_fact.toString(), // Número de factura a afectar
-            numeroNotaCredito: id_notaCredito.toString() // Número de nota de crédito a crear
+            numeroNotaCredito: resultadoNc ? resultadoNc.coddoc.toString() : id_notaCredito.toString() // Número de nota de crédito a crear
         };
 
         console.log("📤 Enviando datos a API destino:", datosParaEnviar);
@@ -706,7 +729,7 @@ async function procesarFacturaParaAPI(id_fact) {
             return {
                 codigoProducto: detalle.coddetalle || `COD-${detalle.coddetalle || '000'}`,
                 nombreProducto: detalle.dendetalle || 'Producto sin nombre',
-                descripcionProducto: detalle.dendetalle + detalle.comentario || 'Descripción del producto',
+                descripcionProducto: detalle.dendetalle + " - " + detalle.comentario || 'Descripción del producto',
                 tipoImpuesto: procesarAlicuota(detalle.porciva) || "G",
                 cantidadAdquirida: detalle.cantidad_detalle ? parseFloat(detalle.cantidad_detalle).toFixed(2) : "1.00",
                 precioProducto: detalle.precio_detalle ? parseFloat(detalle.precio_detalle).toFixed(2) : "0.00",
