@@ -919,14 +919,14 @@ async function anularFacturaEnCG(numeroFactura, id_fact_local = null) {
                 }
                 
                 const retryData = await retryResponse.json();
-                return await procesarAnulacionConFacturas(retryData, numeroFactura, bearerToken, id_fact_local);
+                return await procesarAnulacionConFacturas(retryData, numeroFactura, id_fact_local);
             }
             
             throw new Error(`Error al consultar facturas: ${response.status}`);
         }
         
         const data = await response.json();
-        return await procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id_fact_local);
+        return await procesarAnulacionConFacturas(data, numeroFactura, id_fact_local);
         
     } catch (error) {
         console.error('❌ Error en anulación:', error);
@@ -934,7 +934,7 @@ async function anularFacturaEnCG(numeroFactura, id_fact_local = null) {
     }
 }
 
-async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id_fact_local) {
+async function procesarAnulacionConFacturas(data, numeroFactura, id_fact_local = null) {
     // Verificar que la respuesta sea exitosa
     if (!data.success || !data.invoices || !Array.isArray(data.invoices)) {
         throw new Error('Respuesta inválida del servidor de facturas');
@@ -948,9 +948,7 @@ async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id
     }
     
     // Buscar la factura que coincida con el número proporcionado
-    // Nota: Comparar como string porque puede venir con ceros a la izquierda
     const facturaEncontrada = facturasList.find(factura => {
-        // Convertir ambos a string y eliminar ceros a la izquierda para comparar
         const facturaNumero = String(factura.invoice_number).replace(/^0+/, '');
         const busquedaNumero = String(numeroFactura).replace(/^0+/, '');
         return facturaNumero === busquedaNumero;
@@ -972,6 +970,9 @@ async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id
     };
     
     console.log(`📝 Enviando solicitud de anulación...`);
+    
+    // Obtener token nuevamente (por si acaso)
+    const bearerToken = await tokenManager.getToken();
     
     // 4. Llamar al endpoint de anulación
     const cancelResponse = await fetch(`${tokenManager.host}/api/invoice/cancel_invoice`, {
@@ -1044,7 +1045,7 @@ async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id
     
     console.log(`✅ Factura ${numeroFactura} anulada exitosamente`);
     
-    // 6. Opcional: Actualizar estado local de la factura si se proporcionó id_fact_local
+    // 6. Actualizar estado local de la factura si se proporcionó id_fact_local
     if (id_fact_local) {
         try {
             await pool.query(
@@ -1059,7 +1060,6 @@ async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id
             console.log(`✅ Estado local actualizado para factura ${id_fact_local}`);
         } catch (dbError) {
             console.warn(`⚠️ No se pudo actualizar estado local: ${dbError.message}`);
-            // No lanzamos error para no interrumpir el flujo principal
         }
     }
     
