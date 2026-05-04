@@ -657,6 +657,277 @@ async function recuperarFacturaExistente(id_fact, numeroFactura) {
     };
 }
 
+async function anularFacturaEnCG(numeroFactura, id_fact_local = null) {
+    try {
+        // 1. Obtener token de autenticación
+        const bearerToken = await tokenManager.getToken();
+        
+        // 2. Consultar todas las facturas para buscar la que coincida
+        console.log(`🔍 Buscando factura ${numeroFactura} en CG...`);
+        
+        const response = await fetch(`${tokenManager.host}/api/Invoice/get_list_invoices`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${bearerToken}`,
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        if (!response.ok) {
+            // Si es 401, renovar token y reintentar
+            if (response.status === 401) {
+                console.log('🔄 Token expirado, renovando...');
+                const newToken = await tokenManager.forceRefresh();
+                
+                const retryResponse = await fetch(`${tokenManager.host}/api/Invoice/get_list_invoices`, {
+                    method: 'GET',
+                    headers: {
+                        'Authorization': `Bearer ${newToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!retryResponse.ok) {
+                    throw new Error(`Error al consultar facturas: ${retryResponse.status}`);
+                }
+                
+                const retryData = await retryResponse.json();
+                return await procesarAnulacionConFacturas(retryData, numeroFactura, bearerToken, id_fact_local);
+            }
+            
+            throw new Error(`Error al consultar facturas: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        return await procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id_fact_local);
+        
+    } catch (error) {
+        console.error('❌ Error en anulación:', error);
+        throw error;
+    }
+}
+
+async function procesarAnulacionConFacturas(data, numeroFactura, bearerToken, id_fact_local) {
+    // Verificar que la respuesta sea exitosa
+    if (!data.success || !data.invoices || !Array.isArray(data.invoices)) {
+        throw new Error('Respuesta inválida del servidor de facturas');
+    }
+    
+    // El array de facturas está dentro del primer elemento de data.invoices
+    const facturasList = data.invoices[0];
+    
+    if (!facturasList || facturasList.length === 0) {
+        throw new Error('No se encontraron facturas en el sistema');
+    }
+    
+    // Buscar la factura que coincida con el número proporcionado
+    // Nota: Comparar como string porque puede venir con ceros a la izquierda
+    const facturaEncontrada = facturasList.find(factura => {
+        // Convertir ambos a string y eliminar ceros a la izquierda para comparar
+        const facturaNumero = String(factura.invoice_number).replace(/^0+/, '');
+        const busquedaNumero = String(numeroFactura).replace(/^0+/, '');
+        return facturaNumero === busquedaNumero;
+    });
+    
+    if (!facturaEncontrada) {
+        throw new Error(`No se encontró factura con número ${numeroFactura} en CG`);
+    }
+    
+    console.log(`✅ Factura encontrada:`);
+    console.log(`   - Número: ${facturaEncontrada.invoice_number}`);
+    console.log(`   - Control: ${facturaEncontrada.control_number}`);
+    console.log(`   - Cliente: ${facturaEncontrada.customer_name}`);
+    
+    // 3. Preparar datos para anulación
+    const datosAnulacion = {
+        "numero_documento": String(facturaEncontrada.invoice_number),
+        "numero_control": facturaEncontrada.control_number
+    };
+    
+    console.log(`📝 Enviando solicitud de anulación...`);
+    
+    // 4. Llamar al endpoint de anulación
+    const cancelResponse = await fetch(`${tokenManager.host}/api/invoice/cancel_invoice`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${bearerToken}`
+        },
+        body: JSON.stringify(datosAnulacion)
+    });
+    
+    const responseText = await cancelResponse.text();
+    let resultadoAnulacion;
+    
+    try {
+        resultadoAnulacion = JSON.parse(responseText);
+    } catch (e) {
+        resultadoAnulacion = { success: false, message: responseText };
+    }
+    
+    // 5. Manejar respuesta
+    if (!cancelResponse.ok) {
+        // Verificar si ya estaba anulada
+        if (resultadoAnulacion?.message?.includes('ya fue anulada') ||
+            resultadoAnulacion?.message?.includes('already cancelled') ||
+            cancelResponse.status === 400) {
+            console.log(`⚠️ Factura ${numeroFactura} ya estaba anulada anteriormente`);
+            return {
+                success: true,
+                already_cancelled: true,
+                message: 'La factura ya se encontraba anulada',
+                factura: datosAnulacion
+            };
+        }
+        
+        // Si es 401, renovar token y reintentar una vez más
+        if (cancelResponse.status === 401) {
+            console.log('🔄 Token expirado en anulación, renovando...');
+            const newToken = await tokenManager.forceRefresh();
+            
+            const retryCancelResponse = await fetch(`${tokenManager.host}/api/invoice/cancel_invoice`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${newToken}`
+                },
+                body: JSON.stringify(datosAnulacion)
+            });
+            
+            const retryText = await retryCancelResponse.text();
+            
+            if (!retryCancelResponse.ok) {
+                throw new Error(`Error en anulación después de renovar token: ${retryCancelResponse.status} - ${retryText}`);
+            }
+            
+            resultadoAnulacion = JSON.parse(retryText);
+            
+            console.log(`✅ Anulación exitosa después de renovar token`);
+            return {
+                success: true,
+                already_cancelled: false,
+                result: resultadoAnulacion,
+                factura: datosAnulacion,
+                factura_detalle: facturaEncontrada
+            };
+        }
+        
+        throw new Error(`Error en anulación: ${cancelResponse.status} - ${responseText}`);
+    }
+    
+    console.log(`✅ Factura ${numeroFactura} anulada exitosamente`);
+    
+    // 6. Opcional: Actualizar estado local de la factura si se proporcionó id_fact_local
+    if (id_fact_local) {
+        try {
+            await pool.query(
+                `UPDATE cxc_factura 
+                 SET status_cg = 'ANULADA', 
+                     fecha_anulacion_cg = NOW(),
+                     control_number = $1,
+                     observacion_anulacion = $2
+                 WHERE id_fact = $3`,
+                [facturaEncontrada.control_number, 'Factura anulada en CG', id_fact_local]
+            );
+            console.log(`✅ Estado local actualizado para factura ${id_fact_local}`);
+        } catch (dbError) {
+            console.warn(`⚠️ No se pudo actualizar estado local: ${dbError.message}`);
+            // No lanzamos error para no interrumpir el flujo principal
+        }
+    }
+    
+    return {
+        success: true,
+        already_cancelled: false,
+        result: resultadoAnulacion,
+        factura_encontrada: {
+            numero: facturaEncontrada.invoice_number,
+            control: facturaEncontrada.control_number,
+            cliente: facturaEncontrada.customer_name,
+            fecha: facturaEncontrada.created
+        },
+        datos_enviados: datosAnulacion
+    };
+}
+
+// Endpoint para anular factura desde tu API
+app.post('/api/anularFacturaCG', async (req, res) => {
+    const { numero_factura, id_fact_local } = req.body;
+    
+    // Validaciones
+    if (!numero_factura) {
+        return res.status(400).json({
+            success: false,
+            error: 'Se requiere el número de factura'
+        });
+    }
+    
+    try {
+        console.log(`🚀 Iniciando anulación de factura ${numero_factura}...`);
+        
+        const resultado = await anularFacturaEnCG(numero_factura, id_fact_local);
+        
+        console.log("=== RESULTADO ANULACIÓN ===");
+        console.log(`Factura: ${numero_factura}`);
+        console.log(`Exitosa: ${resultado.success}`);
+        console.log(`Ya anulada: ${resultado.already_cancelled || false}`);
+        console.log("==========================");
+        
+        res.json({
+            success: true,
+            data: resultado
+        });
+        
+    } catch (error) {
+        console.error('❌ Error al anular factura:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Error al anular la factura en CG',
+            detalle: error.message,
+            factura: numero_factura
+        });
+    }
+});
+
+// Endpoint para anular factura por ID local (busca el número automáticamente)
+app.post('/api/anularFacturaCGPorId/:id_fact', async (req, res) => {
+    const { id_fact } = req.params;
+    
+    try {
+        // Obtener el número de factura desde tu base de datos
+        const facturaResult = await pool.query(
+            `SELECT numfact FROM cxc_factura WHERE id_fact = $1`,
+            [id_fact]
+        );
+        
+        if (facturaResult.rows.length === 0) {
+            return res.status(404).json({
+                success: false,
+                error: 'Factura no encontrada en el sistema local'
+            });
+        }
+        
+        const numeroFactura = facturaResult.rows[0].numfact;
+        
+        console.log(`🔍 Anulando factura local ID ${id_fact} = Número ${numeroFactura}`);
+        
+        const resultado = await anularFacturaEnCG(numeroFactura, id_fact);
+        
+        res.json({
+            success: true,
+            data: resultado
+        });
+        
+    } catch (error) {
+        console.error('❌ Error:', error);
+        res.status(500).json({
+            success: false,
+            error: error.message,
+            id_fact: id_fact
+        });
+    }
+});
+
 app.get('/api/testConnection', async (req, res) => {
     try {
         console.log("🔍 Probando conectividad básica...");
