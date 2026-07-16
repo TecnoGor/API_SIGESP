@@ -2320,6 +2320,370 @@ app.post('/api/regDetalleContable', async (req, res) => {
 });
 
 // TODO: RETENCIONES
+// Agregar Retención de ISLR
+app.post('/api/agregarRetencionIsrl', async (req, res) => {
+    try {
+        const {
+            documentoIdentidadCliente, 
+            nombreRazonSocialCliente, 
+            correoCliente, 
+            direccionCliente, telefonoCliente,
+            numeroDocumento,
+            numeroControl,
+            fecha,
+            codigo,
+            conceptoPago,
+            montoDocumento,
+            baseRetencion,
+            sustraendo,
+            porcentaje,
+            montoRetenido,
+            codigoRetencionIslr
+        } = req.body;
+
+        //TODO: VALIDAR    
+        // documentoIdentidadCliente    - Requerido formato V882759467
+        // nombreRazonSocialCliente     - Requerido
+        // correoCliente                - Requerido y Valido
+        // direccionCliente             - Requerido
+        // telefonoCliente              - Requerido.
+
+        const datosParaEnviar = {
+            data: [
+                {
+                    cliente: [
+                        {
+                            documentoIdentidadCliente: documentoIdentidadCliente,
+                            nombreRazonSocialCliente: nombreRazonSocialCliente,
+                            correoCliente: correoCliente,
+                            direccionCliente: direccionCliente,
+                            telefonoCliente: telefonoCliente
+                        }
+                    ],
+                    retencionIslr: [
+                        {
+                            numeroDocumento: numeroDocumento,
+                            numeroControl: numeroControl,
+                            fecha: fecha,
+                            codigo: codigo,
+                            conceptoPago: conceptoPago,
+                            montoDocumento: montoDocumento,
+                            baseRetencion: baseRetencion,
+                            sustraendo: sustraendo,
+                            porcentaje: porcentaje,
+                            montoRetenido: montoRetenido,
+                            codigoRetencionIslr: codigoRetencionIslr
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const bearerToken = await tokenManager.getToken();
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/add_retention_islr`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${bearerToken}`
+            },
+            body: JSON.stringify(datosParaEnviar)
+        });
+
+        const responseText = await response.text();
+
+        let resultadoAPI;
+
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error("La API destino no devolvió un JSON válido.");
+        }
+
+        // ==========================================
+        // 3. MANEJO DE ERRORES DE LA API DESTINO
+        // ==========================================
+        
+        if (!response.ok) {
+            throw new Error(resultadoAPI.message);
+        }
+
+        // Validamos si la API nos respondió explícitamente con un error estructurado
+        if (resultadoAPI.success === false) {
+            throw new Error(resultadoAPI.message);
+        }
+        
+        res.status(201).json({
+            success: true,
+            message: "Retencion ISLR registrada exitosamente",
+            data: resultadoAPI
+        })
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+// Agregar Retención de IVA
+app.post('/api/agregarRetencionIva', async (req, res) => {
+    try {
+        const {
+            documentoIdentidadCliente, 
+            nombreRazonSocialCliente, 
+            correoCliente, 
+            direccionCliente, 
+            telefonoCliente,
+            fechaDeFactura,
+            numeroFactura,
+            numeroControl,
+            numeroNotaDeCredito,
+            numeroNotaDeDebito,
+            numeroFacturaAfectada,
+            totalDeCompraIncluyendoIva,
+            compraSinDerechoACreditoFiscal,
+            baseImponible,
+            porcentaje_iva,
+            porcentaje
+        } = req.body;
+
+        //TODO: VALIDAR    
+        // documentoIdentidadCliente    - Requerido formato V882759467
+        // nombreRazonSocialCliente     - Requerido
+        // correoCliente                - Requerido y Valido
+        // direccionCliente             - Requerido
+        // telefonoCliente              - Requerido.
+
+        const datosParaEnviar = {
+            data: [
+                {
+                    cliente: [
+                        {
+                            documentoIdentidadCliente: documentoIdentidadCliente,
+                            nombreRazonSocialCliente: nombreRazonSocialCliente,
+                            correoCliente: correoCliente,
+                            direccionCliente: direccionCliente,
+                            telefonoCliente: telefonoCliente
+                        }
+                    ],
+                    RetencionIva: [
+                        {
+                            fechaDeFactura: fechaDeFactura,
+                            numeroFactura: numeroFactura,
+                            numeroControl: numeroControl,
+                            numeroNotaDeCredito: numeroNotaDeCredito,
+                            numeroNotaDeDebito: numeroNotaDeDebito,
+                            numeroFacturaAfectada: numeroFacturaAfectada,
+                            totalDeCompraIncluyendoIva: totalDeCompraIncluyendoIva,
+                            compraSinDerechoACreditoFiscal: compraSinDerechoACreditoFiscal,
+                            baseImponible: baseImponible,
+                            porcentaje_iva: porcentaje_iva,
+                            porcentaje: porcentaje
+                        }
+                    ]
+                }
+            ]
+        };
+
+        const bearerToken = await tokenManager.getToken();
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/add_retention_iva`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${bearerToken}`
+            },
+            body: JSON.stringify(datosParaEnviar)
+        });
+
+        const responseText = await response.text();
+
+        let resultadoAPI;
+
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error("La API destino no devolvió un JSON válido.");
+        }
+
+        // ==========================================
+        // 3. MANEJO DE ERRORES DE LA API DESTINO
+        // ==========================================
+        
+        if (!response.ok) {
+            throw new Error(resultadoAPI.message);
+        }
+
+        // Validamos si la API nos respondió explícitamente con un error estructurado
+        if (resultadoAPI.success === false) {
+            throw new Error(resultadoAPI.message);
+        }
+        
+        res.status(201).json({
+            success: true,
+            message: "Retencion IVA registrada exitosamente",
+            data: resultadoAPI
+        })
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+// Anular Retención (IVA / ISLR)
+app.post('/api/anularRetencionIvaIslr', async (req, res) => {
+    try {
+        const {
+            numero_comprobante,
+            numero_control,
+            tipo_documento
+        } = req.body;
+
+        //TODO: VALIDAR    
+        // documentoIdentidadCliente    - Requerido formato V882759467
+        // nombreRazonSocialCliente     - Requerido
+        // correoCliente                - Requerido y Valido
+        // direccionCliente             - Requerido
+        // telefonoCliente              - Requerido.
+
+        const datosParaEnviar = {
+            numero_comprobante: numero_comprobante,
+            numero_control: numero_control,
+            tipo_documento: tipo_documento
+        };
+
+        const bearerToken = await tokenManager.getToken();
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/cancel_retention`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${bearerToken}`
+            },
+            body: JSON.stringify(datosParaEnviar)
+        });
+
+        const responseText = await response.text();
+
+        let resultadoAPI;
+
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error("La API destino no devolvió un JSON válido.");
+        }
+
+        // ==========================================
+        // 3. MANEJO DE ERRORES DE LA API DESTINO
+        // ==========================================
+        
+        if (!response.ok) {
+            throw new Error(resultadoAPI.message);
+        }
+
+        // Validamos si la API nos respondió explícitamente con un error estructurado
+        if (resultadoAPI.success === false) {
+            throw new Error(resultadoAPI.message);
+        }
+        
+        res.status(201).json({
+            success: true,
+            message: "Retencion anulada exitosamente",
+            data: resultadoAPI
+        })
+    } catch (err) {
+        res.status(500).json({
+            success: false,
+            error: err.message
+        });
+    }
+});
+
+// Obtener Retenciones ISLR
+app.get('/api/retencionesIslr', async (req, res) => {
+    try {
+        const bearerToken = await tokenManager.getToken();
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/get_retention_islr`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${bearerToken}`
+            }
+        });
+
+        const responseText = await response.text();
+
+        let resultadoAPI;
+        
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error("La API destino no devolvió un JSON válido.");
+        }
+
+        // ==========================================
+        // 3. MANEJO DE ERRORES DE LA API DESTINO
+        // ==========================================
+        
+        if (!response.ok) {
+            throw new Error(resultadoAPI.message);
+        }
+
+        // Validamos si la API nos respondió explícitamente con un error estructurado
+        if (resultadoAPI.success === false) {
+            throw new Error(resultadoAPI.message);
+        }
+        
+        res.status(200).json(resultadoAPI);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener la lista de Retenciones del ISLR' });
+    }    
+});
+
+// Obtener Retenciones IVA
+app.get('/api/retencionesIva', async (req, res) => {
+    try {
+        const bearerToken = await tokenManager.getToken();
+
+        const response = await fetch(`${tokenManager.host}/api/Invoice/get_retention_iva`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${bearerToken}`
+            }
+        });
+
+        const responseText = await response.text();
+
+        let resultadoAPI;
+        
+        try {
+            resultadoAPI = JSON.parse(responseText);
+        } catch (parseError) {
+            throw new Error("La API destino no devolvió un JSON válido.");
+        }
+
+        // ==========================================
+        // 3. MANEJO DE ERRORES DE LA API DESTINO
+        // ==========================================
+        
+        if (!response.ok) {
+            throw new Error(resultadoAPI.message);
+        }
+
+        // Validamos si la API nos respondió explícitamente con un error estructurado
+        if (resultadoAPI.success === false) {
+            throw new Error(resultadoAPI.message);
+        }
+        
+        res.status(200).json(resultadoAPI);
+    } catch (err) {
+        res.status(500).json({ error: 'Error al obtener la lista de Retenciones del IVA' });
+    }    
+});
+
 
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
