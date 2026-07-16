@@ -2319,6 +2319,8 @@ app.post('/api/regDetalleContable', async (req, res) => {
     }
 });
 
+// TODO: RETENCIONES
+
 app.listen(port, () => {
     console.log(`Server running on port ${port}`);
 });
