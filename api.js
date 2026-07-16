@@ -8,6 +8,10 @@ const bodyParser = require('body-parser');
 const cors = require('cors');
 const jwt = require('jsonwebtoken');
 // const tokenManager = require('tokenManager');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = require('./swagger');
+
 require('dotenv').config({ path: '.env.development' });
 
 const app = express();
@@ -136,6 +140,12 @@ app.use(bodyParser.json());
 app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb', extended: true }));
 app.use(express.urlencoded({ limit: '10mb', extended: true }));
+
+// Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec, {
+    customCss: '.swagger-ui .topbar { display: none }',
+    customSiteTitle: 'API SIGESP - Documentación'
+}));
 
 const pool = new Pool({
     user: process.env.REACT_APP_DB_USER,
@@ -1556,7 +1566,26 @@ async function procesarAnulacionConFacturas(data, numeroFactura, id_fact_local =
     };
 }
 
-// Endpoint para anular factura desde tu API
+/**
+ * @swagger
+ * /api/anularFacturaCG:
+ *   post:
+ *     summary: Anular factura en CG
+ *     tags: [Anulaciones]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AnularFactura'
+ *     responses:
+ *       200:
+ *         description: Factura anulada exitosamente
+ *       400:
+ *         description: Error en la solicitud
+ *       500:
+ *         description: Error interno del servidor
+ */
 app.post('/api/anularFacturaCG', async (req, res) => {
     const { numero_factura, id_fact_local } = req.body;
     
@@ -1595,7 +1624,27 @@ app.post('/api/anularFacturaCG', async (req, res) => {
     }
 });
 
-// Endpoint para anular factura por ID local (busca el número automáticamente)
+/**
+ * @swagger
+ * /api/anularFacturaCGPorId/{id_fact}:
+ *   post:
+ *     summary: Anular factura por ID local
+ *     tags: [Anulaciones]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la factura local
+ *     responses:
+ *       200:
+ *         description: Factura anulada exitosamente
+ *       404:
+ *         description: Factura no encontrada
+ *       500:
+ *         description: Error interno
+ */
 app.post('/api/anularFacturaCGPorId/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
     
@@ -1634,6 +1683,7 @@ app.post('/api/anularFacturaCGPorId/:id_fact', async (req, res) => {
     }
 });
 
+/*
 app.get('/api/testConnection', async (req, res) => {
     try {
         console.log("🔍 Probando conectividad básica...");
@@ -1696,7 +1746,20 @@ app.get('/api/testConnection', async (req, res) => {
         });
     }
 });
+*/
 
+/**
+ * @swagger
+ * /api/token/status:
+ *   get:
+ *     summary: Consultar estado del token de autenticación
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: Estado del token
+ *       500:
+ *         description: Error al consultar
+ */
 app.get('/api/token/status', async (req, res) => {
     try {
         const status = tokenManager.getTokenStatus();
@@ -1712,6 +1775,18 @@ app.get('/api/token/status', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/token/refresh:
+ *   post:
+ *     summary: Renovar token de autenticación
+ *     tags: [Sistema]
+ *     responses:
+ *       200:
+ *         description: Token renovado exitosamente
+ *       500:
+ *         description: Error al renovar token
+ */
 app.post('/api/token/refresh', async (req, res) => {
     try {
         const newToken = await tokenManager.forceRefresh();
@@ -1730,6 +1805,7 @@ app.post('/api/token/refresh', async (req, res) => {
     }
 });
 
+/*
 app.get('/api/testSimple/:id_fact', async (req, res) => {
     try {
         const { id_fact } = req.params;
@@ -1826,7 +1902,26 @@ app.get('/api/testSimple/:id_fact', async (req, res) => {
         });
     }
 });
+*/
 
+/**
+ * @swagger
+ * /api/facturaTransformada/{id_fact}:
+ *   get:
+ *     summary: Obtener factura transformada para API externa
+ *     tags: [Facturas]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Factura transformada
+ *       500:
+ *         description: Error al transformar
+ */
 app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
 
@@ -1839,6 +1934,31 @@ app.get('/api/facturaTransformada/:id_fact', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/procesarNotaCredito/{id_fact}/{id_nc}:
+ *   get:
+ *     summary: Procesar nota de crédito completa
+ *     tags: [Notas de Crédito]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la factura a afectar
+ *       - in: path
+ *         name: id_nc
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: ID de la nota de crédito
+ *     responses:
+ *       200:
+ *         description: Nota de crédito procesada
+ *       500:
+ *         description: Error al procesar
+ */
 app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
     const { id_fact, id_nc } = req.params;
 
@@ -1873,6 +1993,24 @@ app.get('/api/procesarNotaCredito/:id_fact/:id_nc', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/procesarNotaCreditoParcial:
+ *   post:
+ *     summary: Procesar nota de crédito parcial con productos
+ *     tags: [Notas de Crédito]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/ProcesarNotaCreditoParcial'
+ *     responses:
+ *       200:
+ *         description: Nota de crédito parcial procesada
+ *       500:
+ *         description: Error al procesar
+ */
 app.post('/api/procesarNotaCreditoParcial', async (req, res) => {
     try {
         const datos = req.body;
@@ -1900,8 +2038,33 @@ app.post('/api/procesarNotaCreditoParcial', async (req, res) => {
     }
 });
 
-//ENDPOINT para SIGESP
-
+/**
+ * @swagger
+ * /api/registrarFacturaSigespCG:
+ *   post:
+ *     summary: Registrar factura completa en SIGESP con todos los componentes
+ *     tags: [Facturas]
+ *     description: |
+ *       Registra factura completa incluyendo: cliente, factura, cargos,
+ *       comprobante, afectación presupuestaria, asientos contables y documento.
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegistrarFactura'
+ *     responses:
+ *       201:
+ *         description: Factura registrada exitosamente
+ *         content:
+ *           application/json:
+ *             schema:
+ *               $ref: '#/components/schemas/RegistrarFacturaResponse'
+ *       400:
+ *         description: Campos requeridos faltantes
+ *       500:
+ *         description: Error interno
+ */
 app.post('/api/registrarFacturaSigespCG', async (req, res) => {
     try {
         const datos = req.body;
@@ -1973,6 +2136,24 @@ app.post('/api/registrarFacturaSigespCG', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/procesarFactura/{id_fact}:
+ *   get:
+ *     summary: Procesar factura y enviar a API externa CG
+ *     tags: [Facturas]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Factura procesada con link de PDF
+ *       500:
+ *         description: Error al procesar
+ */
 app.get('/api/procesarFactura/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
 
@@ -2001,6 +2182,24 @@ app.get('/api/procesarFactura/:id_fact', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/facturaDP/{id_fact}:
+ *   get:
+ *     summary: Obtener detalle principal de factura con cliente
+ *     tags: [Consultas]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Detalle de factura con información completa
+ *       500:
+ *         description: Error al obtener
+ */
 app.get('/api/facturaDP/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
     try {
@@ -2045,6 +2244,24 @@ app.get('/api/facturaDP/:id_fact', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/facturaD/{id_fact}:
+ *   get:
+ *     summary: Obtener detalle de líneas de factura
+ *     tags: [Consultas]
+ *     parameters:
+ *       - in: path
+ *         name: id_fact
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Líneas de detalle de la factura
+ *       500:
+ *         description: Error al obtener
+ */
 app.get('/api/facturaD/:id_fact', async (req, res) => {
     const { id_fact } = req.params;
     try {
@@ -2076,6 +2293,24 @@ app.get('/api/facturaD/:id_fact', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/regFactura:
+ *   post:
+ *     summary: Registrar factura (CRUD directo)
+ *     tags: [CRUD Básico]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegFactura'
+ *     responses:
+ *       201:
+ *         description: Factura registrada
+ *       500:
+ *         description: Error al registrar
+ */
 app.post('/api/regFactura', async (req, res) => {
     const {
         id_fact,
@@ -2179,6 +2414,24 @@ app.post('/api/regFactura', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/regCargos:
+ *   post:
+ *     summary: Registrar cargos de factura
+ *     tags: [CRUD Básico]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegCargos'
+ *     responses:
+ *       201:
+ *         description: Cargo registrado
+ *       500:
+ *         description: Error al registrar
+ */
 app.post('/api/regCargos', async (req, res) => {
     const {
         codemp, id_fact, codproceso, codcar, formula, porcar, monbasimp, monimp, montot,
@@ -2219,6 +2472,24 @@ app.post('/api/regCargos', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/regComprobante:
+ *   post:
+ *     summary: Registrar comprobante contable
+ *     tags: [CRUD Básico]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegComprobante'
+ *     responses:
+ *       201:
+ *         description: Comprobante registrado
+ *       500:
+ *         description: Error al registrar
+ */
 app.post('/api/regComprobante', async (req, res) => {
     const {
         codemp, procede, comprobante, fecha, descripcion, tipo_comp, tipo_destino, cod_pro,
@@ -2249,6 +2520,24 @@ app.post('/api/regComprobante', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/regAfectacion:
+ *   post:
+ *     summary: Registrar afectación presupuestaria
+ *     tags: [CRUD Básico]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegAfectacion'
+ *     responses:
+ *       201:
+ *         description: Afectación registrada
+ *       500:
+ *         description: Error al registrar
+ */
 app.post('/api/regAfectacion', async (req, res) => {
     const {
         codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion,
@@ -2286,6 +2575,24 @@ app.post('/api/regAfectacion', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/regDetalleContable:
+ *   post:
+ *     summary: Registrar detalle contable (asiento débito/crédito)
+ *     tags: [CRUD Básico]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RegDetalleContable'
+ *     responses:
+ *       201:
+ *         description: Detalle contable registrado
+ *       500:
+ *         description: Error al registrar
+ */
 app.post('/api/regDetalleContable', async (req, res) => {
     const {
         codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab,
@@ -2319,6 +2626,25 @@ app.post('/api/regDetalleContable', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/agregarRetencionIsrl:
+ *   post:
+ *     summary: Agregar retención de ISLR
+ *     tags: [Retenciones]
+ *     description: Registra una retención de Impuesto Sobre la Renta en la API externa CG
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RetencionISLR'
+ *     responses:
+ *       201:
+ *         description: Retención ISLR registrada exitosamente
+ *       500:
+ *         description: Error al registrar retención
+ */
 // TODO: RETENCIONES
 // Agregar Retención de ISLR
 app.post('/api/agregarRetencionIsrl', async (req, res) => {
@@ -2426,6 +2752,25 @@ app.post('/api/agregarRetencionIsrl', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/agregarRetencionIva:
+ *   post:
+ *     summary: Agregar retención de IVA
+ *     tags: [Retenciones]
+ *     description: Registra una retención de IVA en la API externa CG
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/RetencionIVA'
+ *     responses:
+ *       201:
+ *         description: Retención IVA registrada exitosamente
+ *       500:
+ *         description: Error al registrar retención
+ */
 // Agregar Retención de IVA
 app.post('/api/agregarRetencionIva', async (req, res) => {
     try {
@@ -2533,6 +2878,25 @@ app.post('/api/agregarRetencionIva', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/anularRetencionIvaIslr:
+ *   post:
+ *     summary: Anular retención (IVA o ISLR)
+ *     tags: [Retenciones]
+ *     description: Anula un comprobante de retención previamente registrado en CG
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             $ref: '#/components/schemas/AnularRetencion'
+ *     responses:
+ *       201:
+ *         description: Retención anulada exitosamente
+ *       500:
+ *         description: Error al anular retención
+ */
 // Anular Retención (IVA / ISLR)
 app.post('/api/anularRetencionIvaIslr', async (req, res) => {
     try {
@@ -2602,6 +2966,19 @@ app.post('/api/anularRetencionIvaIslr', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/retencionesIslr:
+ *   get:
+ *     summary: Obtener lista de retenciones ISLR
+ *     tags: [Retenciones]
+ *     description: Consulta todas las retenciones de ISLR registradas en CG
+ *     responses:
+ *       200:
+ *         description: Lista de retenciones ISLR
+ *       500:
+ *         description: Error al consultar retenciones
+ */
 // Obtener Retenciones ISLR
 app.get('/api/retencionesIslr', async (req, res) => {
     try {
@@ -2643,6 +3020,19 @@ app.get('/api/retencionesIslr', async (req, res) => {
     }    
 });
 
+/**
+ * @swagger
+ * /api/retencionesIva:
+ *   get:
+ *     summary: Obtener lista de retenciones IVA
+ *     tags: [Retenciones]
+ *     description: Consulta todas las retenciones de IVA registradas en CG
+ *     responses:
+ *       200:
+ *         description: Lista de retenciones IVA
+ *       500:
+ *         description: Error al consultar retenciones
+ */
 // Obtener Retenciones IVA
 app.get('/api/retencionesIva', async (req, res) => {
     try {
