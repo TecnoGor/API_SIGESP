@@ -1,0 +1,41 @@
+import { checkExact, param, query } from "express-validator";
+import { ValidaDatos } from "../utils/funcionesGlobales.js";
+import type { NextFunction, Request, Response } from "express";
+
+// ? VERIFICADA - 27-07-2026
+export const valPathParamIdFact = [
+    param("id_fact")
+            .notEmpty()
+            .withMessage("El parametro [id_fact] es requerido.")
+            .bail()
+            .isNumeric()
+            .withMessage("El parametro [id_fact] debe ser numérico.")
+            .bail()
+            .isInt({ min: 1 })
+            .withMessage("El parametro [id_fact] debe ser un numero entero mayor a 0."),
+
+    (req: Request, res: Response, next: NextFunction) => {
+        ValidaDatos(req, res, next, "middleware:valPathParamIdFact");
+
+        next();
+    },
+];
+
+// ? VERIFICADA - 27-07-2026
+export const valPathParamIdDoc = [
+    param("id_doc")
+            .notEmpty()
+            .withMessage("El parametro [id_doc] es requerido.")
+            .bail()
+            .isNumeric()
+            .withMessage("El parametro [id_doc] debe ser numérico.")
+            .bail()
+            .isInt({ min: 1 })
+            .withMessage("El parametro [id_doc] debe ser un numero entero mayor a 0."),
+
+    (req: Request, res: Response, next: NextFunction) => {
+        ValidaDatos(req, res, next, "middleware:valPathParamIdDoc");
+
+        next();
+    },
+];

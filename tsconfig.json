@@ -1,0 +1,17 @@
+{
+    "compilerOptions": {
+        "target": "ES2020",
+        "module": "ESNext",
+        "moduleResolution": "Bundler",
+        "verbatimModuleSyntax": true,
+        "rootDir": "./src",
+        "outDir": "./dist",
+        "esModuleInterop": true,
+        "forceConsistentCasingInFileNames": true,
+        "strict": true,
+        "skipLibCheck": true,
+        "types": ["node"] // AGREGA ESTA LÍNEA AQUÍ:
+    },
+    "include": ["src"],
+    "exclude": ["node_modules"]
+}
