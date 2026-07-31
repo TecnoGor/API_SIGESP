@@ -1,48 +1,3 @@
--- DROP FUNCTION public.fn_api_contingencia_documentos_enviados(int4, varchar, varchar, varchar, text, timestamptz);
-
-CREATE OR REPLACE FUNCTION public.fn_api_contingencia_documentos_enviados(prm_numfact integer, prm_coddoc character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_fecreg timestamp with time zone)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
-	DECLARE
-	    -- 1. Se deben declarar las variables locales antes del BEGIN
-	    VAR_ID_FACT INTEGER;
-	    VAR_ID_DOC  INTEGER;
-	    VAR_NUMFACT INTEGER;
-	    VAR_COUNT   INTEGER;
-
-	BEGIN
-	    IF (prm_codtipdoc = 'FACTURA') THEN
-			-- Busca el id de la factura en la tabla cxc_factura
-			SELECT f.id_fact INTO VAR_ID_FACT FROM cxc_factura f WHERE f.numfact = prm_numfact;
-
-			-- Busca el id de la factura en la tabla cxc_factura
-			SELECT COUNT(*) INTO VAR_COUNT FROM api_integracion_documentos_cgi i WHERE i.id_fact = VAR_ID_FACT AND i.numfact = prm_numfact AND i.codtipdoc = prm_codtipdoc;
-
-		    IF (VAR_COUNT <= 0 ) THEN
-				INSERT INTO api_integracion_documentos_cgi (id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg) 
-				VALUES (VAR_ID_FACT, prm_numfact, null, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg);		
-			END IF;
-		ELSE
-			-- Busca el id de la note de credito en la tabla cxc_documento
-			SELECT 	d.id_fact, d.id_doc, f.numfact 
-			INTO 	VAR_ID_FACT, VAR_ID_DOC, VAR_NUMFACT 
-			FROM 	cxc_documento d 
-					INNER JOIN cxc_factura f ON d.id_fact = f.id_fact 
-			WHERE 	d.coddoc = prm_coddoc;
-
-			-- Busca el id de la factura en la tabla cxc_factura
-			SELECT COUNT(*) INTO VAR_COUNT FROM api_integracion_documentos_cgi i WHERE i.id_fact = VAR_ID_FACT AND i.id_doc = VAR_ID_DOC AND i.codtipdoc = prm_codtipdoc;
-
-			IF (VAR_COUNT <= 0 ) THEN
-				INSERT INTO api_integracion_documentos_cgi (id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg) 
-				VALUES (VAR_ID_FACT, VAR_NUMFACT, VAR_ID_DOC, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg);		
-			END IF;	
-		END IF;
-	END;
-$function$
-;
-
 -- DROP FUNCTION public.fn_api_delete_configuracion();
 
 CREATE OR REPLACE FUNCTION public.fn_api_delete_configuracion()
@@ -265,9 +220,9 @@ END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_patch_configuracion_cgi(text, text, varchar, bool);
+-- DROP FUNCTION public.fn_api_patch_configuracion_cgi(text, text, varchar, bool, text);
 
-CREATE OR REPLACE FUNCTION public.fn_api_patch_configuracion_cgi(prm_id_cliente text, prm_key text, prm_aplicacion character varying, prm_activo boolean)
+CREATE OR REPLACE FUNCTION public.fn_api_patch_configuracion_cgi(prm_id_cliente text, prm_key text, prm_aplicacion character varying, prm_activo boolean, prm_token text)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
@@ -277,7 +232,8 @@ BEGIN
         id_cliente = COALESCE(NULLIF(prm_id_cliente, ''), id_cliente),        
         "key" = COALESCE(NULLIF(prm_key, ''), "key"),
 		aplicacion = COALESCE(NULLIF(prm_aplicacion, ''), aplicacion),
-		activo = COALESCE(prm_activo, activo);
+		activo = COALESCE(prm_activo, activo),
+		token = COALESCE(NULLIF(prm_token, ''), token);
 END;
 $function$
 ;
@@ -310,15 +266,17 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_post_integracion_documentos(int4, int4, int4, varchar, varchar, text);
+-- DROP FUNCTION public.fn_api_post_integracion_documentos(int4, int4, int4, varchar, varchar, text, bpchar);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text)
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
-		INSERT INTO api_integracion_documentos_cgi (id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf) 
-		VALUES (prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf);		
+		INSERT INTO api_integracion_documentos_cgi 
+			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu) 
+		VALUES 
+			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu);		
 	END;
 $function$
 ;

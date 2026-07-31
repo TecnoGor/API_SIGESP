@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import * as serv from "../services/config.services.js";
 
-// ? TODO: OJO OJO OJO - MIGRADA
+// ? VERIFICADA - 27-07-2026
 export async function getConfiguracionController(
     req: Request,
     res: Response,
@@ -19,7 +19,7 @@ export async function getConfiguracionController(
     });
 }
 
-// ? TODO: OJO OJO OJO - MIGRADA
+// ? VERIFICADA - 27-07-2026
 export async function getConfiguracionCgiController(
     req: Request,
     res: Response,

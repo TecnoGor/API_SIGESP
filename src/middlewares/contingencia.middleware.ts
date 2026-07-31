@@ -3,7 +3,7 @@ import * as func from "../utils/funcionesGlobales.js";
 import type { NextFunction, Request, Response } from "express";
 
 // ? VERIFICADA - 27-07-2026
-export const valPostBodyNC = [
+export const valPostBodyContingencia = [
     body("codigo_usuario")
         .trim()
         .notEmpty()
@@ -21,7 +21,7 @@ export const valPostBodyNC = [
     }),
 
     (req: Request, res: Response, next: NextFunction) => {
-        func.ValidaDatos(req, res, next, "middleware:valPostBodyNC");
+        func.ValidaDatos(req, res, next, "middleware:valPostBodyContingencia");
 
         next();
     },

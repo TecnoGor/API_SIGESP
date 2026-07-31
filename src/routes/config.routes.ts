@@ -14,7 +14,4 @@ router.post("/cgi/", ctrl.postConfiguracionCgiController);                      
 router.patch("/cgi/", midd.valPatchBodyConfigCgi, ctrl.patchConfiguracionCgiController);    // ? VERIFICADA - 27-07-2026
 router.delete("/cgi/", ctrl.deleteConfiguracionCgiController);                              // ? VERIFICADA - 27-07-2026
 
-// INTEGRACION CGI
-// router.post("/token", /*verificaToken,*/ ctrl.postTokenController);    // TODO: SOLO PARA PRUEBAS VERIFICADA - 27-07-2026
-
 export default router;

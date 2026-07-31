@@ -1,13 +1,13 @@
-import axios from 'axios';
 import { pool } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
-import { TokenManager } from '../utils/tokenManager.js';
+import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IFacturaDetalle } from '../types/IFacturaDetalle.js';
 import type { IResponseFactura } from '../types/IResponseFactura.js';
 import type { IFacturaAnular } from '../types/IFacturaAnular.js';
 
+
 // ? VERIFICADA - 27-07-2026
-export async function postAgregarService(id_fact: number): Promise<IResponseFactura> {
+export async function postAgregarService(id_fact: number, codigo_usuario: string): Promise<IResponseFactura> {
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_detalle($1)';
@@ -48,48 +48,39 @@ export async function postAgregarService(id_fact: number): Promise<IResponseFact
             ]
         };
 
-        // TODO: OJO OJO OJO - QUITAR porque se utilizara interceptores
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-        // Crear instancia del TokenManager
-        const tokenManager = new TokenManager();
+        // 4. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // Nota como no le pasamos headers, ni baseURL, ni Authorization.
+        // El interceptor hace todo eso antes de salir de tu backend.
+        const response = await apiExternaClient.post('/api/Invoice/add_list_invoice', payLoad);
 
-        const bearerToken = await tokenManager.getToken();
-        // const bearerToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzg0ODM0MjIwLCJleHAiOjE3ODQ4Mzc4MjAsIm5iZiI6MTc4NDgzNDIyMCwiY2xpZW50X2lkIjoiUm8zNW5IQXEzYkVVTXYxV3RcL3hRTXc9PSIsImNsaWVudF9uYW1lIjoiSU5TVElUVVRPIFBPU1RBTCBURUxFR1JBRklDTyBERSBWRU5FWlVFTEEiLCJjbGllbnRfdHlwZV9kb2N1bWVudF9yaWYiOiJndkFZczdUSmkxZ204WllwZFc5d2F3PT0iLCJjbGllbnRfcmlmIjoiQ1ZzMXJXUWRJcDhrNHhvM2pmUHFOZz09In0.mOczOGDNbgSabnC1Jd6t-SzuKad21nzqIr2IO178Tn8"; //await tokenManager.getToken();
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-
-        // Ejecuto la peticion
-        const response = await axios.post(
-            `${process.env.APP_API_CGI_URL}/api/Invoice/add_list_invoice`, 
-            payLoad, 
-            {             
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${bearerToken}`
-                }
-            }
-        );
-
-        // console.log('******* RESPONSE DATA ************')
-        // console.log(response.data)
-        // console.log(response.data.invoice_errors.length)
-        // console.log('**********************************')
-
-        if ( response.data.invoice_errors.length > 0 ) {
+        if (response.data.invoice_errors && response.data.invoice_errors.length > 0) {
             throw new AppError(`${response.data.message.trim()} ${response.data.invoice_errors[0]}`, 409, "service:postAgregarService");
         }
 
-        // TODO: FALTA AGREGAR EL NUMERO DE CONTROL Y LA RUTA DEL PDF A LA NUEVA TABLA
+        // Guarda los datos del documento enviado
         const prm_id_fact = id_fact;
         const prm_numfact = result.rows[0].numfact;
         const prm_id_doc = null;
         const prm_codtipdoc = 'FACTURA';
         const prm_num_control = response.data.invoice_list_success[0].control_number;
         const prm_url_pdf = response.data.invoice_list_success[0].invoice_pdf;
+        const prm_codusu = codigo_usuario;
 
-        // Elimina los datos de la configuracion Local
-        const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6)';
-        const result1 = await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf]);
-        // TODO: FALTA AGREGAR EL NUMERO DE CONTROL Y LA RUTA DEL PDF A LA NUEVA TABLA
+        // 👇 NUEVO: Envolvemos SOLO la base de datos en un try-catch independiente
+        try {
+            // Elimina los datos de la configuracion Local
+            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
+            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+        
+        } catch (dbError) {
+            // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
+            // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
+            // o guardar este error en un archivo de texto para no perder el rastro.
+            console.error(`🚨 CRÍTICO: Factura ${prm_numfact} creada en CGI, pero falló guardado local:`, dbError);
+            
+            // ¡MUY IMPORTANTE! NO hacemos 'throw' aquí. 
+            // Dejamos que el código continúe para que el cliente reciba su respuesta de éxito.
+        }
 
         // retornamos la respuesta
         return response.data.invoice_list_success[0];
@@ -99,12 +90,7 @@ export async function postAgregarService(id_fact: number): Promise<IResponseFact
             throw error; // ✅ ya tiene statusCode y location
         }
 
-        // console.log('************* ERROR **************')
-        // console.log(error.response.data)
-        // console.log(error.response.status)        
-        // console.log('**********************************')
-
-        if (error.response.data) {
+        if (error?.response?.data) {
             throw new AppError(error.response.data.message.trim(), error.response.status, "service:postAgregarService");    
         }
 
@@ -130,30 +116,10 @@ export async function postAnularService(id_fact: number): Promise<any> {
             numero_control: result.rows[0].num_control
         };
 
-        // TODO: OJO OJO OJO - QUITAR porque se utilizara interceptores
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-        // Crear instancia del TokenManager
-        const tokenManager = new TokenManager();
-
-        const bearerToken = await tokenManager.getToken();
-        // const bearerToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzg0ODM0MjIwLCJleHAiOjE3ODQ4Mzc4MjAsIm5iZiI6MTc4NDgzNDIyMCwiY2xpZW50X2lkIjoiUm8zNW5IQXEzYkVVTXYxV3RcL3hRTXc9PSIsImNsaWVudF9uYW1lIjoiSU5TVElUVVRPIFBPU1RBTCBURUxFR1JBRklDTyBERSBWRU5FWlVFTEEiLCJjbGllbnRfdHlwZV9kb2N1bWVudF9yaWYiOiJndkFZczdUSmkxZ204WllwZFc5d2F3PT0iLCJjbGllbnRfcmlmIjoiQ1ZzMXJXUWRJcDhrNHhvM2pmUHFOZz09In0.mOczOGDNbgSabnC1Jd6t-SzuKad21nzqIr2IO178Tn8"; //await tokenManager.getToken();
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-
-        // Ejecuto la peticion
-        const response = await axios.post(
-            `${process.env.APP_API_CGI_URL}/api/Invoice/cancel_invoice`, 
-            payLoad, 
-            {             
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${bearerToken}`
-                }
-            }
-        );
-
-        // console.log('******* RESPONSE DATA ************')
-        // console.log(response.data)
-        // console.log('**********************************')
+        // 4. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // Nota como no le pasamos headers, ni baseURL, ni Authorization.
+        // El interceptor hace todo eso antes de salir de tu backend.
+        const response = await apiExternaClient.post('/api/Invoice/cancel_invoice', payLoad);
 
         return;
         
@@ -162,12 +128,7 @@ export async function postAnularService(id_fact: number): Promise<any> {
             throw error; // ✅ ya tiene statusCode y location
         }
 
-        // console.log('************* ERROR **************')
-        // console.log(error.response.data)
-        // console.log(error.response.status)        
-        // console.log('**********************************')
-
-        if (error.response.data) {
+        if (error?.response?.data) {
             throw new AppError(error.response.data.message.trim(), error.response.status, "service:postAnularService");    
         }
 

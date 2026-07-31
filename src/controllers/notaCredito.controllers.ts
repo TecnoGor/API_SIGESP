@@ -8,8 +8,9 @@ export async function postCrearNCController(
     next: NextFunction,
 ): Promise<void> {
     const { id_doc } = req.params as any;
+    const { codigo_usuario } = req.body;
 
-    const result = await serv.postCrearNCService(parseInt(id_doc));
+    const result = await serv.postCrearNCService(parseInt(id_doc), codigo_usuario);
 
     res.status(201).json({
         error: false,
@@ -27,8 +28,9 @@ export async function postCrearNCParcialController(
     next: NextFunction,
 ): Promise<void> {
     const { id_doc } = req.params as any;
+    const { codigo_usuario } = req.body;
 
-    const result = await serv.postCrearNCParcialService(parseInt(id_doc));
+    const result = await serv.postCrearNCParcialService(parseInt(id_doc), codigo_usuario);
 
     res.status(201).json({
         error: false,

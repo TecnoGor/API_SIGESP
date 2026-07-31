@@ -1,36 +1,15 @@
-import axios from 'axios';
 import { pool } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
-import { TokenManager } from '../utils/tokenManager.js';
+import apiExternaClient from '../utils/apiExternaClient.js';
 
 // ? VERIFICADA - 27-07-2026
-export async function postCargarDocumentosEnviadosService(): Promise<void> {
+export async function postCargarDocumentosEnviadosService(codigo_usuario: string): Promise<void> {
     try {
-        // TODO: OJO OJO OJO - QUITAR porque se utilizara interceptores
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-        // Crear instancia del TokenManager
-        const tokenManager = new TokenManager();
-
-        const bearerToken = await tokenManager.getToken();
-        // const bearerToken = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJGYWN0dXJhY2lcdTAwZjNuIENHIiwiaWF0IjoxNzg0ODM0MjIwLCJleHAiOjE3ODQ4Mzc4MjAsIm5iZiI6MTc4NDgzNDIyMCwiY2xpZW50X2lkIjoiUm8zNW5IQXEzYkVVTXYxV3RcL3hRTXc9PSIsImNsaWVudF9uYW1lIjoiSU5TVElUVVRPIFBPU1RBTCBURUxFR1JBRklDTyBERSBWRU5FWlVFTEEiLCJjbGllbnRfdHlwZV9kb2N1bWVudF9yaWYiOiJndkFZczdUSmkxZ204WllwZFc5d2F3PT0iLCJjbGllbnRfcmlmIjoiQ1ZzMXJXUWRJcDhrNHhvM2pmUHFOZz09In0.mOczOGDNbgSabnC1Jd6t-SzuKad21nzqIr2IO178Tn8"; //await tokenManager.getToken();
-        // TODO: SOLO SE HABILITO POR PRUEBAS
-
-        // Ejecuto la peticion
-        const response = await axios.get(
-            `${process.env.APP_API_CGI_URL}/api/Invoice/get_list_invoices`,
-            {             
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${bearerToken}`
-                }
-            }
-        );
-
-        // console.log('******* RESPONSE DATA ************')
-        // console.log(response.data.invoices.length)
-        // console.log(response.data.invoices.flat().length)
-        // console.log('**********************************')
-
+        // 4. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // Nota como no le pasamos headers, ni baseURL, ni Authorization.
+        // El interceptor hace todo eso antes de salir de tu backend.
+        const response = await apiExternaClient.get('/api/Invoice/get_list_invoices');
+        
         // 1. Aplanamos la matriz por si viene como [[{...}, {...}]]
         const invoicesList = response.data.invoices.flat(); 
 
@@ -43,10 +22,11 @@ export async function postCargarDocumentosEnviadosService(): Promise<void> {
             const prm_num_control = item.control_number;
             const prm_url_pdf = item.invoice_pdf;
             const prm_fecreg = item.created;
+            const prm_codusu = codigo_usuario;
 
             // 3. Ejecutamos el Stored Procedure / Función para cada registro
-            const query = 'SELECT * FROM fn_api_contingencia_documentos_enviados($1, $2, $3, $4, $5, $6)';
-            await pool.query(query, [prm_numfact, prm_coddoc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg]);
+            const query = 'SELECT * FROM fn_api_contingencia_documentos_enviados($1, $2, $3, $4, $5, $6, $7)';
+            await pool.query(query, [prm_numfact, prm_coddoc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu]);
         }
 
         return;
@@ -56,12 +36,7 @@ export async function postCargarDocumentosEnviadosService(): Promise<void> {
             throw error; // ✅ ya tiene statusCode y location
         }
 
-        // console.log('************* ERROR **************')
-        // console.log(error.response.data)
-        // console.log(error.response.status)        
-        // console.log('**********************************')
-
-        if (error.response.data) {
+        if (error?.response?.data) {
             throw new AppError(error.response.data.message.trim(), error.response.status, "service:postCrearNCService");    
         }
 

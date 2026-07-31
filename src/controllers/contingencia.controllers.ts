@@ -7,7 +7,9 @@ export async function postCargarDocumentosEnviadosController(
     res: Response,
     next: NextFunction,
 ): Promise<void> {
-    const result = await serv.postCargarDocumentosEnviadosService();
+    const { codigo_usuario } = req.body;
+
+    const result = await serv.postCargarDocumentosEnviadosService(codigo_usuario);
 
     res.status(201).json({
         error: false,

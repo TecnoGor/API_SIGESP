@@ -45,5 +45,8 @@ CREATE TABLE public.api_integracion_documentos_cgi (
 	num_control varchar(25) NOT NULL,
 	url_pdf text NOT NULL,
 	fecreg timestamptz DEFAULT now() NOT NULL,
+	codusu bpchar(30) NULL,
 	CONSTRAINT api_integracion_documentos_cgi_pkey PRIMARY KEY (id)
 );
+CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_cgi USING btree (id_fact, codtipdoc, numfact) WHERE ((codtipdoc)::text = 'FACTURA'::text);
+CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_cgi USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);

@@ -8,8 +8,9 @@ export async function postAgregarController(
     next: NextFunction,
 ): Promise<void> {
     const { id_fact } = req.params as any;
+    const { codigo_usuario } = req.body;
 
-    const result = await serv.postAgregarService(parseInt(id_fact));
+    const result = await serv.postAgregarService(parseInt(id_fact), codigo_usuario);
 
     res.status(201).json({
         error: false,
