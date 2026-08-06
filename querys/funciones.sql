@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 -- DROP FUNCTION public.fn_api_contingencia_documentos_enviados(int4, varchar, varchar, varchar, text, timestamptz, bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_contingencia_documentos_enviados(prm_numfact integer, prm_coddoc character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_fecreg timestamp with time zone, prm_codusu character)
@@ -43,6 +44,8 @@ AS $function$
 $function$
 ;
 
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
 -- DROP FUNCTION public.fn_api_delete_configuracion();
 
 CREATE OR REPLACE FUNCTION public.fn_api_delete_configuracion()
@@ -247,6 +250,7 @@ AS $function$
 $function$
 ;
 
+<<<<<<< HEAD
 -- DROP FUNCTION public.fn_api_get_retencion_islr(bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_islr(prm_numcom character)
@@ -402,6 +406,8 @@ AS $function$
 $function$
 ;
 
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
 -- DROP FUNCTION public.fn_api_patch_configuracion(text, text);
 
 CREATE OR REPLACE FUNCTION public.fn_api_patch_configuracion(prm_id_cliente text, prm_key text)

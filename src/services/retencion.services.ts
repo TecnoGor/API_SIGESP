@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { pool } from "../database/db.js";
 import apiExternaClient from "../utils/apiExternaClient.js";
 import { AppError } from "../utils/appError.js";
@@ -288,5 +289,27 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
 }
 
 // export async function postAnularRetencionIvaIslrService(numsol: string, codigo_usuario: string): Promise<string[]> {
+=======
+// import type { ICalendario } from "../types/ICalendario.js";
+// import { AppError } from "../utils/appError.js";
+
+// export async function getRetencionesIslrService(_id: string): Promise<ICalendario[]> {
+//     return []
+// }
+
+// export async function getRetencionesIvaService(_id: string): Promise<ICalendario[]> {
+//     return []
+// }
+
+// export async function postAgregarRetencionIsrlService(): Promise<string[]> {
+//     return []
+// }
+
+// export async function postAgregarRetencionIvaService(): Promise<string[]> {
+//     return []
+// }
+
+// export async function postAnularRetencionIvaIslrService(): Promise<string[]> {
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
 //     return []
 // }

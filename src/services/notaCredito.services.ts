@@ -4,6 +4,7 @@ import apiExternaClient from '../utils/apiExternaClient.js';
 import type { INotaCreditoDetalle } from '../types/INotaCreditoDetalle.js';
 import type { IResponseNotaCredito } from '../types/IResponseNotaCredito.js';
 import type { IResponseNotaCreditoParcial } from '../types/IResponseNotaCreditoParcial.js';
+<<<<<<< HEAD
 import * as func from "../utils/funcionesGlobales.js";
 
 // ? VERIFICADA - 27-07-2026
@@ -17,6 +18,11 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
     // Bloquea el documento
     func.bloquearDocumento(documento);
 
+=======
+
+// ? VERIFICADA - 27-07-2026
+export async function postCrearNCService(id_doc: number, codigo_usuario: string): Promise<IResponseNotaCredito> {
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     try {
         // Busco los datos de la Nota de Credito
         const query = 'SELECT * FROM fn_api_get_nota_credito($1)';
@@ -85,14 +91,18 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
         }
 
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCrearNCService");
+<<<<<<< HEAD
     } finally {
         // Libera el documento del proceso
         func.liberarDocumento(documento);
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     }
 }
 
 // ? VERIFICADA - 27-07-2026
 export async function postCrearNCParcialService(id_doc: number, codigo_usuario: string): Promise<IResponseNotaCreditoParcial> {
+<<<<<<< HEAD
     // arma el documento que se va a procesar
     const documento = `NC-PARCIAL: ${id_doc.toString()}`;
 
@@ -102,6 +112,8 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
     // Bloquea el documento
     func.bloquearDocumento(documento);
 
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     try {
         // Busco los datos de la Nota de Credito Parcial
         const query = 'SELECT * FROM fn_api_get_nota_credito($1)';
@@ -181,8 +193,11 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
         }
 
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCrearNCParcialService");
+<<<<<<< HEAD
     } finally {
         // Libera el documento del proceso
         func.liberarDocumento(documento);
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     }
 }

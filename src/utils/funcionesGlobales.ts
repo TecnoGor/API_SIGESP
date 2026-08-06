@@ -5,9 +5,12 @@ import { validationResult } from "express-validator";
 import { AppError } from "../utils/appError.js";
 import type { IPayLoadToken } from "../types/IPayLoadToken.js";
 
+<<<<<<< HEAD
 // Mapa en memoria para documentos en proceso
 const documentosEnProceso = new Set<string>();
 
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
 // ? VERIFICADA - 27-07-2026
 export function ValidaDatos(
     req: Request,
@@ -63,6 +66,7 @@ export async function Encriptar(cadena: string, location: string) {
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, location);
     }
 }
+<<<<<<< HEAD
 
 // ? LISTO - 20-06-2025
 export function VerificaDocumentoEnProceso(key: string, location: string)
@@ -82,3 +86,5 @@ export function bloquearDocumento(key: string): void {
 export function liberarDocumento(key: string): void {
     documentosEnProceso.delete(key);
 }
+=======
+>>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
