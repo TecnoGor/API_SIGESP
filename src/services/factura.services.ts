@@ -4,7 +4,6 @@ import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IFacturaDetalle } from '../types/IFacturaDetalle.js';
 import type { IResponseFactura } from '../types/IResponseFactura.js';
 import type { IFacturaAnular } from '../types/IFacturaAnular.js';
-<<<<<<< HEAD
 import * as func from "../utils/funcionesGlobales.js";
 
 // ? VERIFICADA - 27-07-2026
@@ -18,12 +17,6 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
     // Bloquea el documento
     func.bloquearDocumento(documento);
 
-=======
-
-
-// ? VERIFICADA - 27-07-2026
-export async function postAgregarService(id_fact: number, codigo_usuario: string): Promise<IResponseFactura> {
->>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_detalle($1)';
@@ -111,18 +104,14 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
         }
 
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postAgregarService");
-<<<<<<< HEAD
     } finally {
         // Libera el documento del proceso
         func.liberarDocumento(documento);
-=======
->>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     }
 }
 
 // ? VERIFICADA - 27-07-2026
 export async function postAnularService(id_fact: number): Promise<any> {
-<<<<<<< HEAD
     // arma el documento que se va a procesar
     const documento = `ANULACION: ${id_fact.toString()}`;
 
@@ -132,8 +121,6 @@ export async function postAnularService(id_fact: number): Promise<any> {
     // Bloquea el documento
     func.bloquearDocumento(documento)
 
-=======
->>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_anular($1)';
@@ -167,15 +154,10 @@ export async function postAnularService(id_fact: number): Promise<any> {
         }
 
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postAnularService");
-<<<<<<< HEAD
     } 
     finally {
         // Libera el documento del proceso
         func.liberarDocumento(documento);
     }
 }
-=======
-    }
-}
 
->>>>>>> 933874c243f1b7de424fa96e5452bd8e2587b0b0
