@@ -1,9 +1,40 @@
-import { poolSigesp } from "../database/db.js";
+import { poolSigesp, poolSispven } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 
 // ? VERIFICADA - 27-07-2026
-export async function postCargarDocumentosEnviadosService(codigo_usuario: string): Promise<void> {
+export async function postXxxService(codigo_usuario: string): Promise<void> {
+    try {
+        // 3. Ejecutamos el Stored Procedure / Función para cada registro
+        const query = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
+        const result = await poolSispven.query(query);
+
+        // // Busco los datos de la configuracion Local
+        //     const query = 'SELECT * FROM fn_api_get_configuracion()';
+        //     const result = await poolSigesp.query<IConfiguracion>(query);    
+        
+        console.log(result.rows)
+
+
+        // retornamos las filas
+        return result.rows as any;
+        
+    } catch (error: any) {
+        if (error instanceof AppError) {
+            throw error; // ✅ ya tiene statusCode y location
+        }
+
+        if (error?.response?.data) {
+            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postCrearNCService");    
+        }
+
+        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCrearNCService");
+    }
+}
+
+/*
+// ? VERIFICADA - 27-07-2026
+export async function postXxxService(codigo_usuario: string): Promise<void> {
     try {
         // 4. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
         // Nota como no le pasamos headers, ni baseURL, ni Authorization.
@@ -43,4 +74,4 @@ export async function postCargarDocumentosEnviadosService(codigo_usuario: string
         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCrearNCService");
     }
 }
-
+*/

@@ -1,11 +1,13 @@
 import app from "./app.js";
-import { conexionPostgresSql } from "./database/db.js";
+import { conexionSigespPostgresSql, conexionSispvenPostgresSql } from "./database/db.js";
+
 
 const PORT = app.get("port");
 
 async function main() {
     try {
-        await conexionPostgresSql();
+        await conexionSigespPostgresSql();
+        await conexionSispvenPostgresSql();
 
         app.listen(PORT, () => {
             console.log(`🚀 Servidor escuchando en el puerto ${PORT}...`);

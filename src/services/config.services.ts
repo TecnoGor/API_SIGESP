@@ -1,4 +1,4 @@
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import type { IRequestConfiguracion } from "../types/IRequestConfiguracion.js";
 import type { IConfiguracion } from "../types/IConfiguracion.js";
 import type { IConfiguracionCgi } from "../types/IConfiguracionCgi.js";
@@ -8,7 +8,7 @@ import type { IRequestConfiguracionCgi } from "../types/IRequestConfiguracionCgi
 export async function getConfiguracionService(): Promise<IConfiguracion[]> {
     // Busco los datos de la configuracion Local
     const query = 'SELECT * FROM fn_api_get_configuracion()';
-    const result = await pool.query<IConfiguracion>(query);    
+    const result = await poolSigesp.query<IConfiguracion>(query);    
     
     // retornamos las filas
     return result.rows;
@@ -18,7 +18,7 @@ export async function getConfiguracionService(): Promise<IConfiguracion[]> {
 export async function getConfiguracionCgiService(): Promise<IConfiguracionCgi[]> {
     // Busco los datos de la configuracion CGI
     const query = 'SELECT * FROM fn_api_get_configuracion_cgi()';
-    const result = await pool.query<IConfiguracionCgi>(query);    
+    const result = await poolSigesp.query<IConfiguracionCgi>(query);    
     
     // retornamos las filas
     return result.rows;
@@ -33,11 +33,11 @@ export async function postConfiguracionService(): Promise<void> {
 
     // Elimina los datos de la configuracion Local
     const query1 = 'SELECT * FROM fn_api_delete_configuracion()';
-    const result1 = await pool.query(query1);    
+    const result1 = await poolSigesp.query(query1);    
     
     // Inserta los datos de la configuracion Local
     const query2 = 'SELECT * FROM fn_api_post_configuracion($1, $2)';
-    const result2 = await pool.query(query2, [data.id_cliente, data.key]);    
+    const result2 = await poolSigesp.query(query2, [data.id_cliente, data.key]);    
 
     return;
 }
@@ -53,11 +53,11 @@ export async function postConfiguracionCgiService(): Promise<void> {
 
     // Elimina los datos de la configuracion Local
     const query1 = 'SELECT * FROM fn_api_delete_configuracion_cgi()';
-    const result1 = await pool.query(query1);    
+    const result1 = await poolSigesp.query(query1);    
     
     // Inserta los datos de la configuracion Local
     const query2 = 'SELECT * FROM fn_api_post_configuracion_cgi($1, $2, $3, $4)';
-    const result2 = await pool.query(query2, [data.id_cliente, data.key, data.aplicacion, data.activo]); 
+    const result2 = await poolSigesp.query(query2, [data.id_cliente, data.key, data.aplicacion, data.activo]); 
 
     return;
 }
@@ -66,7 +66,7 @@ export async function postConfiguracionCgiService(): Promise<void> {
 export async function patchConfiguracionService(data: IRequestConfiguracion): Promise<void> {
     // Actualiza los datos de la configuracion Local
     const query = 'SELECT * FROM fn_api_patch_configuracion($1, $2)';
-    const result = await pool.query(query, [data.id_cliente, data.key]);    
+    const result = await poolSigesp.query(query, [data.id_cliente, data.key]);    
 
     return;
 }
@@ -75,7 +75,7 @@ export async function patchConfiguracionService(data: IRequestConfiguracion): Pr
 export async function patchConfiguracionCgiService(data: IRequestConfiguracionCgi): Promise<void> {
     // Actualiza los datos de la configuracion Local
     const query = 'SELECT * FROM fn_api_patch_configuracion_cgi($1, $2, $3, $4)';
-    const result = await pool.query(query, [data.id_cliente, data.key, data.aplicacion, data.activo]);    
+    const result = await poolSigesp.query(query, [data.id_cliente, data.key, data.aplicacion, data.activo]);    
 
     return;
 }
@@ -84,7 +84,7 @@ export async function patchConfiguracionCgiService(data: IRequestConfiguracionCg
 export async function deleteConfiguracionService(): Promise<void> {
     // Elimina los datos de la configuracion Local
     const query = 'SELECT * FROM fn_api_delete_configuracion()';
-    await pool.query(query);    
+    await poolSigesp.query(query);    
 
     return;
 }
@@ -93,7 +93,7 @@ export async function deleteConfiguracionService(): Promise<void> {
 export async function deleteConfiguracionCgiService(): Promise<void> {
     // Elimina los datos de la configuracion Local
     const query = 'SELECT * FROM fn_api_delete_configuracion_cgi()';
-    await pool.query(query);    
+    await poolSigesp.query(query);    
 
     return;
 }

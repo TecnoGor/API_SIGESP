@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import { AppError } from './appError.js';
 import type { IConfiguracionCgi } from '../types/IConfiguracionCgi.js';
 
@@ -30,7 +30,7 @@ async function obtenerYGuardarNuevoToken() {
 
         // Actualiza los datos de la configuracion Local
         const query = 'SELECT * FROM fn_api_patch_configuracion_cgi($1, $2, $3, $4, $5)';
-        await pool.query(query, [null, null, null, null, newToken]);
+        await poolSigesp.query(query, [null, null, null, null, newToken]);
 
         // console.log('✅ Nuevo token guardado en BD');
         
@@ -46,7 +46,7 @@ async function obtenerYGuardarNuevoToken() {
 apiExternaClient.interceptors.request.use(async (config) => {
     // Busco los datos de la configuracion CGI
     const query = 'SELECT * FROM fn_api_get_configuracion_cgi()';
-    const result = await pool.query<IConfiguracionCgi>(query);    
+    const result = await poolSigesp.query<IConfiguracionCgi>(query);    
 
     // verifico si la aplicacion esta registrada
     if (result.rows.length <= 0 ) {

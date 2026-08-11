@@ -9,9 +9,9 @@ router.post("/", ctrl.postConfiguracionController);                             
 router.patch("/", midd.valPatchBodyConfig, ctrl.patchConfiguracionController);              // ? VERIFICADA - 27-07-2026
 router.delete("/", ctrl.deleteConfiguracionController);                                     // ? VERIFICADA - 27-07-2026
 
-router.get("/cgi/", ctrl.getConfiguracionCgiController);                                    // ? VERIFICADA - 27-07-2026
-router.post("/cgi/", ctrl.postConfiguracionCgiController);                                  // ? VERIFICADA - 27-07-2026
-router.patch("/cgi/", midd.valPatchBodyConfigCgi, ctrl.patchConfiguracionCgiController);    // ? VERIFICADA - 27-07-2026
-router.delete("/cgi/", ctrl.deleteConfiguracionCgiController);                              // ? VERIFICADA - 27-07-2026
+router.get("/cgi", ctrl.getConfiguracionCgiController);                                     // ? VERIFICADA - 27-07-2026
+router.post("/cgi", ctrl.postConfiguracionCgiController);                                   // ? VERIFICADA - 27-07-2026
+router.patch("/cgi", midd.valPatchBodyConfigCgi, ctrl.patchConfiguracionCgiController);     // ? VERIFICADA - 27-07-2026
+router.delete("/cgi", ctrl.deleteConfiguracionCgiController);                               // ? VERIFICADA - 27-07-2026
 
 export default router;

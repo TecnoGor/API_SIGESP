@@ -1,4 +1,4 @@
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IFacturaDetalle } from '../types/IFacturaDetalle.js';
@@ -20,7 +20,7 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_detalle($1)';
-        const result = await pool.query<IFacturaDetalle>(query, [id_fact]);    
+        const result = await poolSigesp.query<IFacturaDetalle>(query, [id_fact]);    
 
         // verifico si existe la factura
         if (result.rows.length <= 0 ) {
@@ -79,7 +79,7 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
         try {
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
@@ -124,7 +124,7 @@ export async function postAnularService(id_fact: number): Promise<any> {
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_anular($1)';
-        const result = await pool.query<IFacturaAnular>(query, [id_fact]);    
+        const result = await poolSigesp.query<IFacturaAnular>(query, [id_fact]);    
 
         // verifico si existe la factura
         if (result.rows.length <= 0 ) {

@@ -269,7 +269,7 @@ AS $function$
 							WHEN sol.tipproben = 'B' THEN b.email
 							ELSE '' 
 						END, ''
-					), 'prueba@prueba.com'
+					), 'mail@gmail.com'
 			))::varchar AS email,
 			
 			UPPER(cmp.dirsujret)::varchar AS dirsujret,
@@ -293,7 +293,7 @@ AS $function$
 			)::varchar AS telefono,
 			
 			dt.numfac,			 
-			dt.numcon::varchar AS num_control, -- OJO OJO OJO - PREGUNTAR SI ESTE DEBE SER EL NUMERO DE CONTROL GENERADO POR LA IMPRENTA DIGITAL
+			idc.num_control::varchar AS num_control,
 			to_char(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,
 			dt.cmp_codret,
 			UPPER(sol.consol)::text AS consol,	
@@ -310,8 +310,9 @@ AS $function$
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
 			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp	
-			LEFT JOIN public.rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
-			LEFT JOIN public.rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
+			INNER JOIN api_integracion_documentos_cgi idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'	
+			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
+			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
 			cmp.codemp='0001'
 		AND	cmp.codret='0000000006'
@@ -346,7 +347,7 @@ AS $function$
 							WHEN sol.tipproben = 'B' THEN b.email
 							ELSE '' 
 						END, ''
-					), 'prueba@prueba.com'
+					), 'mail@gmail.com'
 			))::varchar AS email,
 			
 			UPPER(cmp.dirsujret)::varchar AS dirsujret,
@@ -371,8 +372,7 @@ AS $function$
 
 			to_char(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,
 			dt.numfac,			 
-			dt.numcon::varchar AS num_control, -- OJO OJO OJO - PREGUNTAR SI ESTE DEBE SER EL NUMERO DE CONTROL GENERADO POR LA IMPRENTA DIGITAL			
-			
+			idc.num_control::varchar AS num_control,
 			'N/A'::varchar AS nota_credito,
 			'N/A'::varchar AS nota_debito,
 			'N/A'::varchar AS factura_afectada,
@@ -386,10 +386,10 @@ AS $function$
 			scb_cmp_ret cmp
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
-			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp	
-			LEFT JOIN public.rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
-			LEFT JOIN public.rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene   
-			LEFT JOIN public.api_integracion_documentos_cgi idc ON idc.numfact = NULLIF(TRIM(dt.numfac), '')::int AND idc.codtipdoc = 'FACTURA'
+			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp
+			INNER JOIN api_integracion_documentos_cgi idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'
+			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
+			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
 			cmp.codemp='0001'
 		AND	cmp.codret='0000000001'

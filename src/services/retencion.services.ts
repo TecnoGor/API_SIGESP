@@ -1,4 +1,4 @@
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import apiExternaClient from "../utils/apiExternaClient.js";
 import { AppError } from "../utils/appError.js";
 import * as func from "../utils/funcionesGlobales.js";
@@ -63,19 +63,24 @@ export async function postAgregarRetencionIsrlService(numcom: string, codigo_usu
     try {
         // Busco los datos de la retencion
         const query = 'SELECT * FROM fn_api_get_retencion_islr($1)';
-        const result = await pool.query<IRetencionIslr>(query, [numcom]);    
+        const result = await poolSigesp.query<IRetencionIslr>(query, [numcom]);    
 
         // verifico si existe la retencion
         if (result.rows.length <= 0 ) {
             throw new AppError('Retencion no encontrada', 404, "service:postAgregarRetencionIsrlService");
         }
 
+        // Verifico la cantidad de facturas asociadas a la retencion. No puede ser mayor a 3 facturas
+        // TODO: PASAR ESE PARAMETRO 3 A UNA BASE DE DATOS.
+        if (result.rows.length > 3 ) {
+            throw new AppError('La Retencion solo pertmite un máximo de 3 facturas por documento', 404, "service:postAgregarRetencionIsrlService");
+        }
+
         // Datos del detalle de la retencion
         const detalleRet = result.rows.map(row => {
             return {
                 numeroDocumento: row.numfac.trim(),
-                numeroControl: row.num_control.trim(),  // TODO: OJO OJO OJO - PREGUNTAR SI ESTENUMERO DE CONTROL DEBE SER EL GENERADO POR LA IMPRENTA DIGITAL PARA UNA FACTURA
-                                                        // TODO: OJO OJO OJO - SI ES ASI SE DEBE CAMBIAR EN EL QUERY fn_api_get_retencion_islr
+                numeroControl: row.num_control.trim(),
                 fecha: row.fecfac,
                 codigo: row.cmp_codret.trim(),
                 conceptoPago: row.consol.trim(),
@@ -132,7 +137,7 @@ export async function postAgregarRetencionIsrlService(numcom: string, codigo_usu
         try {
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
@@ -182,11 +187,17 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
     try {
         // Busco los datos de la retencion
         const query = 'SELECT * FROM fn_api_get_retencion_iva($1)';
-        const result = await pool.query<IRetencionIva>(query, [numcom]);    
+        const result = await poolSigesp.query<IRetencionIva>(query, [numcom]);    
 
         // verifico si existe la retencion
         if (result.rows.length <= 0 ) {
             throw new AppError('Retencion no encontrada', 404, "service:postAgregarRetencionIvaService");
+        }
+
+        // Verifico la cantidad de facturas asociadas a la retencion. No puede ser mayor a 3 facturas
+        // TODO: PASAR ESE PARAMETRO 3 A UNA BASE DE DATOS.
+        if (result.rows.length > 3 ) {
+            throw new AppError('La Retencion solo pertmite un máximo de 3 facturas por documento', 404, "service:postAgregarRetencionIvaService");
         }
 
         // Datos del detalle de la retencion
@@ -194,8 +205,7 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
             return {
                 fechaDeFactura: row.fecfac,
                 numeroFactura: row.numfac.trim(),
-                numeroControl: row.num_control.trim(),  // TODO: OJO OJO OJO - PREGUNTAR SI ESTENUMERO DE CONTROL DEBE SER EL GENERADO POR LA IMPRENTA DIGITAL PARA UNA FACTURA
-                                                        // TODO: OJO OJO OJO - SI ES ASI SE DEBE CAMBIAR EN EL QUERY fn_api_get_retencion_islr                
+                numeroControl: row.num_control.trim(),
                 numeroNotaDeCredito: row.nota_credito.trim(),
                 numeroNotaDeDebito: row.nota_debito.trim(),
                 numeroFacturaAfectada: row.factura_afectada.trim(),                
@@ -251,7 +261,7 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
         try {
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.

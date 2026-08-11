@@ -1,5 +1,5 @@
 import { AppError } from "../utils/appError.js";
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import * as func from "../utils/funcionesGlobales.js";
 import type { IPayLoadToken } from "../types/IPayLoadToken.js";
 import type { IRequestToken } from "../types/IRequestToken.js";
@@ -9,7 +9,7 @@ import type { IConfiguracionCgi } from "../types/IConfiguracionCgi.js";
 export async function postTokenService(data: IRequestToken): Promise<string> {
     // Busco los datos de la configuracion CGI
     const query = 'SELECT * FROM fn_api_get_configuracion_cgi()';
-    const result = await pool.query<IConfiguracionCgi>(query);    
+    const result = await poolSigesp.query<IConfiguracionCgi>(query);    
 
     // verifico si la aplicacion esta registrada
     if (result.rows.length <= 0 ) {

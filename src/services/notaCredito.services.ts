@@ -1,4 +1,4 @@
-import { pool } from "../database/db.js";
+import { poolSigesp } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 import type { INotaCreditoDetalle } from '../types/INotaCreditoDetalle.js';
@@ -20,7 +20,7 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
     try {
         // Busco los datos de la Nota de Credito
         const query = 'SELECT * FROM fn_api_get_nota_credito($1)';
-        const result = await pool.query<INotaCreditoDetalle>(query, [id_doc]);    
+        const result = await poolSigesp.query<INotaCreditoDetalle>(query, [id_doc]);    
 
         // verifico si existe la Nota de Credito
         if (result.rows.length <= 0 ) {
@@ -62,7 +62,7 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
         try {
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);        
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);        
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
             // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
@@ -105,7 +105,7 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
     try {
         // Busco los datos de la Nota de Credito Parcial
         const query = 'SELECT * FROM fn_api_get_nota_credito($1)';
-        const result = await pool.query<INotaCreditoDetalle>(query, [id_doc]);    
+        const result = await poolSigesp.query<INotaCreditoDetalle>(query, [id_doc]);    
 
         // verifico si existe la Nota de Credito Parcial
         if (result.rows.length <= 0 ) {
@@ -158,7 +158,7 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
         try {
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await pool.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
             // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
