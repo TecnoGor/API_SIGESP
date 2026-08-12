@@ -29,3 +29,6 @@ CREATE TABLE public.cxc_clientes (
 	-- usureg 				varchar(45) NULL,								-- ADMINISTRADOR
 	-- horareg 			time NULL,											-- NOW() FORMATO HH-MM-SS
 );
+
+
+
