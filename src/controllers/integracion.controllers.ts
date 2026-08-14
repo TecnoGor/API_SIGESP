@@ -14,7 +14,7 @@ export async function postXxxController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Se cargaron los documentos correctamente",
+        message: "Se enviaron los documentos correctamente",
         data: result,
         pagination: null,
     });

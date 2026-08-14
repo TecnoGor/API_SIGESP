@@ -24,6 +24,7 @@ CREATE TABLE public.cxc_clientes (
 	-- nombreresp 			varchar(254) NOT NULL,							-- ''
 	-- cargoresp 			varchar(100) NOT NULL,							-- ''
 	-- emailresp 			varchar(40) NOT NULL,							-- ''
+	
 	-- fecregcliente 		date NULL,										-- NOW() FORMATO YYYY-MM-DD
 	-- fecreg 				date NULL,										-- NOW() FORMATO YYYY-MM-DD
 	-- usureg 				varchar(45) NULL,								-- ADMINISTRADOR
@@ -32,3 +33,31 @@ CREATE TABLE public.cxc_clientes (
 
 
 
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_clientes(
+	prm_codemp 			character varying, 
+	prm_codcliente 		character varying, 
+	prm_tipperrif 		character varying, 
+	prm_numpririf 		character varying, 
+	prm_numterrif 		character varying, 
+	prm_nombre_cliente 	character varying, 
+	prm_cliente_abvr 	character varying, 
+	prm_dircliente 		character varying, 
+	prm_direntrega 		character varying, 
+	prm_codpai 			character varying, 
+	prm_codest 			character varying, 
+	prm_codmun 			character varying, 
+	prm_codpar 			character varying, 
+	prm_codciu 			character varying, 
+	prm_codpostal 		character varying, 
+	prm_faxcliente 		character varying, 
+	prm_telcliente 		character varying, 
+	prm_emailcliente 	character varying, 
+	prm_webcliente 		character varying, 
+	prm_observcliente 	character varying, 
+	prm_nombreresp 		character varying, 
+	prm_cargoresp 		character varying, 
+	prm_emailresp 		character varying, 
+	prm_fecregcliente 	date, 
+	prm_fecreg 			date, 
+	prm_usureg 			character varying, 
+	prm_horareg 		time)
