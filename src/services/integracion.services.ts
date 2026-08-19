@@ -1,173 +1,170 @@
 import { poolSigesp, poolSispven } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
+import type { IRequestIntegracionFactura } from "../types/IRequestIntegracionFactura.js";
+
+// ! QUITAR SOLO POR PRUEBAS
+export async function yyyyService(): Promise<IRequestIntegracionFactura> {
+    // PASO 1: Ejecutamos el Stored Procedure / Función para obtener la data (Clientes + Encabezado + Detalle) (Servidor SYSPVEN)
+    const query = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
+    const result = await poolSispven.query<any>(query);
+    const datos = result.rows[0];
+
+     // Datos del detalle
+    const detalle = result.rows.map((row: any) => {
+        return {
+            id_detalle:  Number(row.id_detalle), 
+			renglon: Number(row.renglon), 
+			id_servicio: Number(row.id_servicio), 
+			precio: Number(row.precio), 
+			cantidad:  Number(row.cantidad), 
+			porc_iva:  Number(row.porc_iva), 
+			iva_detalle:  Number(row.iva_detalle), 
+			total_detalle:  Number(row.total_detalle), 
+			comentario: row.comentario.trim(),
+        }
+    });
+
+    const resultado = {
+        cliente: {
+            "rif": datos.rif,
+			"nombre": datos.nombre,
+			"direccion": datos.direccion,
+			"telefono": datos.telefono,
+			"email": datos.email
+        },
+        factura: {
+            "id_factura": datos.id_factura,
+			"sub_total": datos.sub_total,
+			"base_imp": datos.base_imp,
+			"iva": datos.iva,
+			"total": datos.total,
+			"descripcion": datos.descripcion,
+            "fecha_fact": datos.fecha_fact
+        },
+        detalle: detalle
+    }
+    
+    return resultado;
+}
 
 // ? VERIFICADA - 27-07-2026
-export async function postXxxService(codigo_usuario: string): Promise<void> {
+export async function postIntegracionFacturaService(data: IRequestIntegracionFactura): Promise<void> {
+    const { cliente, factura, detalle } = data;
+
     // Obtenemos una conexión dedicada del pool (Servidor SIGESP)
     const clientSigesp = await poolSigesp.connect();
 
     try {
         // PASO 1: Ejecutamos el Stored Procedure / Función para obtener la data (Clientes + Encabezado + Detalle) (Servidor SYSPVEN)
-        const queryFacturas = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
-        const result = await poolSispven.query(queryFacturas);
-        const filasPlanas = result.rows;
+        // const queryFacturas = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
+        // const result = await poolSispven.query(queryFacturas);
+        // const filasPlanas = result.rows;
 
-        if (!filasPlanas || filasPlanas.length === 0) {
-            console.log('No hay registros para procesar.');
-            return;
-        }
+        // if (!filasPlanas || filasPlanas.length === 0) {
+        //     console.log('No hay registros para procesar.');
+        //     return;
+        // }
 
         // ------------------------------------------------------------------------
         // INICIO DE LA TRANSACCIÓN (Servidor SIGESP)
         // ------------------------------------------------------------------------
         await clientSigesp.query('BEGIN');
         
-        const mapaClientesId = new Map<string, number>();   // Key: RIF -> Value: id_cliente (SIGESP)
-        const mapaFacturasId = new Map<number, number>();   // Key: facturacion_id (Origen) -> Value: id_fact (SIGESP)
-        const mapaDetallesSet = new Set<string>();          // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
-        const mapaDetalleCargoSet = new Set<string>();      // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaClientesId = new Map<string, number>();           // Key: RIF -> Value: id_cliente (SIGESP)
+        const mapaFacturasId = new Map<number, { id_fact: number; numfact: number }>();
+        const mapaDetallesSet = new Set<string>();                  // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCargoSet = new Set<string>();                     // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompPrincipal = new Set<string>();                // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompPresupuesto = new Set<string>();                // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
 
-        for (const fila of filasPlanas) {
-            // ---------------------------------------------------------------------
-            // PASO 2: Procesar Clientes Únicos y guardar id_cliente en un Mapa (RIF -> id_cliente)
-            // ---------------------------------------------------------------------            
-            const rif = String(fila.numpririf || '').trim();
-            const idFacturaOrigen = Number(fila.facturacion_id);
+        // ---------------------------------------------------------------------
+        // PASO 1: Agregar Clientes
+        // ---------------------------------------------------------------------            
+        const rif = cliente.rif.trim()
 
-            if (rif && !mapaClientesId.has(rif)) {
-                
-                const queryCliente = `
-                    SELECT public.fn_api_integracion_cxc_clientes(
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
-                        $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-                        $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, 
-                        $31
-                    ) AS id_cliente;
-                `;
+        if (!mapaClientesId.has(rif)) {
+            
+            const queryCliente = `SELECT public.fn_api_integracion_cxc_clientes($1, $2, $3, $4, $5) AS id_cliente;`;
 
-                // Construimos el array de parametros para clientes
-                const valuesCliente = [
-                    fila.codemp,
-                    fila.tipperrif,
-                    fila.numpririf,
-                    fila.numterrif,
-                    fila.id_tipo_cliente,
-                    fila.nombre_cliente,
-                    fila.cliente_abvr,
-                    fila.id_zona,
-                    fila.id_vend,
-                    fila.id_clasif_cliente,
-                    fila.dircliente,
-                    fila.direntrega,
-                    fila.codpai, 
-                    fila.codest, 
-                    fila.codmun, 
-                    fila.codpar, 
-                    fila.codciu, 
-                    fila.codpostal,
-                    fila.faxcliente, 
-                    fila.telcliente, 
-                    fila.emailcliente, 
-                    fila.webcliente, 
-                    fila.observcliente,
-                    fila.estclient,	
-                    fila.nombreresp, 
-                    fila.cargoresp, 
-                    fila.emailresp,                    
-                    fila.fecreg, 
-                    fila.fecreg, 
-                    fila.usureg,
-                    fila.horareg
-                ];
+            // Construimos el array de parametros para clientes
+            const valuesCliente = [
+                rif,
+                cliente.nombre.trim(),
+                cliente.direccion.trim(),
+                cliente.telefono.trim(),
+                cliente.email.trim()
+            ];
 
-                // Ejecutamos el Stored Procedure / Función para registrar los datos del cliente (Servidor SIGESP)
-                const resCliente = await clientSigesp.query(queryCliente, valuesCliente);
-                const idClienteObtenido = resCliente.rows[0].id_cliente;
+            // Ejecutamos el Stored Procedure / Función para registrar los datos del cliente (Servidor SIGESP)
+            const resCliente = await clientSigesp.query(queryCliente, valuesCliente);
+            const idClienteObtenido = resCliente.rows[0].id_cliente;
 
-                mapaClientesId.set(rif, idClienteObtenido);
-            }
+            // Guarda id_cliente en un Mapa (RIF -> id_cliente)
+            mapaClientesId.set(cliente.rif.trim(), idClienteObtenido);
+        }
 
-            // Obtenemos el id_cliente que ya guardamos/buscamos en el Paso 2
-            const idCliente = mapaClientesId.get(rif);
+        // ---------------------------------------------------------------------
+        // PASO 2: Agregar Factura Encabezado
+        // ---------------------------------------------------------------------    
+        const idFacturaOrigen = factura.id_factura;
+        const idCliente = mapaClientesId.get(rif);
 
-            // ---------------------------------------------------------------------
-            // PASO 3: Agrupar la data plana por Factura (Encabezado + Detalles)
-            // ---------------------------------------------------------------------                        
-            // 1. Si la factura aún no está en el mapa, armamos el objeto Encabezado
-            if (!mapaFacturasId.has(idFacturaOrigen)) {
-                
-                const queryFactura = `
-                    SELECT public.fn_api_integracion_cxc_factura(
-                        $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 
-                        $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24) AS id_fact;
-                `;
+        // 1. Si la factura aún no está en el mapa, armamos el objeto Encabezado
+        if (!mapaFacturasId.has(idFacturaOrigen)) {
+            
+            const queryFactura = `SELECT out_id_fact, out_numfact FROM public.fn_api_integracion_cxc_factura($1, $2, $3, $4, $5, $6, $7, $8;`;
 
-                // Construimos el array de parametros
-                const valuesFactura = [
-                    fila.codemp,
-                    fila.codproceso,
-                    idCliente,
-                    fila.id_transp, 
-                    fila.id_estfact,
-                    fila.id_condpago, 
-                    fila.id_vend, 
-                    fila.codmon,
-                    fila.tascam, 
-                    fila.tipopecont,
-                    fila.codcaj,
-                    fila.fecfact,
-                    fila.fecvenc,
-                    fila.subtot,
-                    fila.iva,
-	                fila.otros,
-	                fila.baseimp,
-	                fila.total,
-                    fila.descripfact,
-                    fila.comentadifact,
-                    fila.fecreg,
-                    fila.usureg,
-                    fila.horareg,
-                    fila.codsuc
-                ];
+            // Construimos el array de parametros
+            const valuesFactura = [
+                idCliente,
+                idFacturaOrigen,
+                factura.sub_total,
+                factura.base_imp,
+                factura.iva,
+                factura.total,
+                factura.descripcion?.trim(),
+                factura.fecha_fact.trim()
+            ];
 
-                // Ejecutamos el Stored Procedure / Función para registrar los datos del Encabezado de la Factura (Servidor SIGESP)
-                const resFactura = await clientSigesp.query(queryFactura, valuesFactura);
-                const idFacturaObtenido = resFactura.rows[0].id_fact;
+            // Ejecutamos el Stored Procedure / Función para registrar los datos del Encabezado de la Factura (Servidor SIGESP)
+            const resFactura = await clientSigesp.query(queryFactura, valuesFactura);
+            const idFacturaObtenido = resFactura.rows[0].id_fact;
+            const numFacturaObtenido = resFactura.rows[0].out_numfact;
 
-                mapaFacturasId.set(idFacturaOrigen, idFacturaObtenido);
-            }
+            // mapaFacturasId.set(idFacturaOrigen, idFacturaObtenido);
 
-            // Obtenemos el id_fact de la factura asegurada en SIGESP
-            const idFactSigesp = mapaFacturasId.get(idFacturaOrigen)!;
+            mapaFacturasId.set(idFacturaOrigen, { id_fact: idFacturaObtenido, numfact: numFacturaObtenido});
+        }
 
-            // ---------------------------------------------------------------------
-            // PASO 4: Verificar y Registrar DETALLE FACTURA
-            // ---------------------------------------------------------------------
-            // Clave única para el detalle: ID_FACTURA_SIGESP + NUMERO_RENGLON
-            const claveDetalle = `${idFactSigesp}-${fila.codproceso}-${fila.renglon}`;
+        // ---------------------------------------------------------------------
+        // PASO 3: Agregar Detalle Fcatura
+        // ---------------------------------------------------------------------
+        // Obtienes el objeto completo
+        const facturaSigesp = mapaFacturasId.get(idFacturaOrigen)!;
+
+        // Accedes a cada valor de forma individual
+        const idFactSigesp = facturaSigesp.id_fact;
+
+        // Recorro el array de detalles
+        for (const fila of detalle) {            
+            // Clave única para el detalle
+            const claveDetalle = `${idFactSigesp}-FACTURA-${fila.renglon}`;
 
             if (!mapaDetallesSet.has(claveDetalle)) {
-                const queryDetalle = `SELECT public.fn_api_integracion_cxc_detalle($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16);`;
+                const queryDetalle = `SELECT public.fn_api_integracion_cxc_detalle($1, $2, $3, $4, $5, $6, $7, $8, $9);`;
 
                 // Reemplaza o ajusta estos campos según lo que pide tu función fn_api_integracion_cxc_dt_factura
                 const valuesDetalle = [
                     idFactSigesp, 
-                    fila.id_tipodetalle,
-                    fila.codproceso,
-                    fila.renglon, 
-                    fila.coddetalle,
-                    fila.codunimed,
-                    fila.codalm,
-                    fila.cantidad_detalle,
-                    fila.precio_detalle,
-                    fila.porciva,
+                    fila.renglon,
+                    fila.id_servicio,
+                    fila.precio,
+                    fila.cantidad,
+                    fila.porc_iva,
                     fila.iva_detalle,
-                    fila.neto_detalle,
-                    fila.comentario,
-                    fila.codproc,
-                    fila.canmay,
-                    fila.precioneto_detalle
+                    fila.total_detalle,
+                    fila.comentario?.trim()                    
                 ];
 
                 await clientSigesp.query(queryDetalle, valuesDetalle);
@@ -175,33 +172,90 @@ export async function postXxxService(codigo_usuario: string): Promise<void> {
                 // Marcamos el detalle como insertado
                 mapaDetallesSet.add(claveDetalle);
             }
-
-            // ---------------------------------------------------------------------
-            // PASO 5: Verificar y Registrar DETALLE FACTURA
-            // ---------------------------------------------------------------------
-            // Clave única para el detalle: ID_FACTURA_SIGESP + NUMERO_RENGLON
-            const claveDetalleCargo = `${fila.codemp}-${fila.codproceso}-${idFactSigesp}-10091`;
-
-            if (!mapaDetalleCargoSet.has(claveDetalleCargo)) {
-                const queryDetalleCargo = `SELECT public.fn_api_integracion_cxc_dt_cargos($1, $2, $3, $4, $5, $6, $7);`;
-
-                // Reemplaza o ajusta estos campos según lo que pide tu función fn_api_integracion_cxc_dt_factura
-                const valuesDetalleCargo = [
-                    fila.codemp,
-                    idFactSigesp,                     
-                    fila.codproceso,                    
-                    fila.precio_detalle,
-                    fila.iva_detalle,
-                    fila.neto_detalle,
-                    0
-                ];
-
-                await clientSigesp.query(queryDetalleCargo, valuesDetalleCargo);
-
-                // Marcamos el detalle como insertado
-                mapaDetalleCargoSet.add(claveDetalleCargo);
-            }
         }
+        
+        // ---------------------------------------------------------------------
+        // PASO 4: Agregar Cargos
+        // ---------------------------------------------------------------------
+        // TODO: OJO OJO OJO - PREGUNTAR SI LA TABLA DE CARGOS VA POR CADA DETALLE QUE EXISTA EN LA FACTURA
+        // TODO: OJO OJO OJO HAY QUE BUSCAR EN UNA TABLA DE CONFIGURACION ESTE CODIGO 10091
+        // Clave única para el Cargo
+        const claveCargo = `0001-FACTURA-${idFactSigesp}-10091`;
+
+        if (!mapaCargoSet.has(claveCargo)) {
+            const queryCargo = `SELECT public.fn_api_integracion_cxc_dt_cargos($1, $2, $3, $4);`;
+
+            // Valore para la funcion función fn_api_integracion_cxc_dt_cargos
+            const valuesCargo = [
+                idFactSigesp,
+                factura.base_imp,
+                factura.iva,
+                factura.total
+            ];
+
+            await clientSigesp.query(queryCargo, valuesCargo);
+
+            // Marcamos el detalle como insertado
+            mapaCargoSet.add(claveCargo);
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 4: Agregar Comprobanmte Principal
+        // ---------------------------------------------------------------------
+        // Accedes a cada valor de forma individual
+        const numFactSigesp = facturaSigesp.numfact;
+
+        // 1. GENERAR NÚMERO DE COMPROBANTE
+        const comprobante = `F-0001- ${numFactSigesp.toString().padStart(13, '0')}`;
+
+		// 2. GENERAR DESCRIPCION DE COMPROBANTE
+		const descripcion = `FACTURA N° ${numFactSigesp.toString()} ${factura.descripcion?.trim()}`;
+
+        // Clave única para el Comprobanmte Principal
+        const claveCompPrincipal = `0001-CXCFAC-${comprobante}`;
+
+        if (!mapaCompPrincipal.has(claveCompPrincipal)) {
+            const queryCompPrincipal = `SELECT public.fn_api_integracion_sigesp_cmp($1, $2, $3, $4, $5);`;
+
+            // Valore para la funcion función fn_api_integracion_sigesp_cmp
+            const valuesCompPrincipal = [
+                comprobante,
+                factura.fecha_fact,
+                descripcion,
+                rif,
+                factura.total
+            ];
+
+            await clientSigesp.query(queryCompPrincipal, valuesCompPrincipal);
+
+            // Marcamos el detalle como insertado
+            mapaCompPrincipal.add(claveCompPrincipal);
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 5: Agregar Detalle Comprobanmte Presupuesto
+        // ---------------------------------------------------------------------
+        // Clave única para el Comprobanmte Principal
+        const claveCompPresupuesto = `0001-CXCFAC-${comprobante}`;
+
+        if (!mapaCompPresupuesto.has(claveCompPresupuesto)) {
+            const queryCompPresupuesto = `SELECT public.fn_api_integracion_spi_dt_cmp($1, $2, $3, $4);`;
+
+            // Valore para la funcion función fn_api_integracion_sigesp_cmp
+            const valuesCompPresupuesto = [
+                comprobante,
+                factura.fecha_fact,
+                descripcion,
+                factura.total
+            ];
+
+            await clientSigesp.query(queryCompPresupuesto, valuesCompPresupuesto);
+
+            // Marcamos el detalle como insertado
+            mapaCompPresupuesto.add(claveCompPresupuesto);
+        }
+
+
 
         // retornamos las filas
         //return filasPlanas as any;

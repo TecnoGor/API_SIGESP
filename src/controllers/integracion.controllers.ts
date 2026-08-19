@@ -1,21 +1,39 @@
 import type { NextFunction, Request, Response } from "express";
 import * as serv from "../services/integracion.services.js";
+import type { IRequestIntegracionFactura } from "../types/IRequestIntegracionFactura.js";
 
-// ? VERIFICADA - 27-07-2026
-export async function postXxxController(
+// ! QUITAR SOLO POR PRUEBAS
+export async function yyyyController(
     req: Request,
     res: Response,
     next: NextFunction,
 ): Promise<void> {
-    const { codigo_usuario } = req.body;
+    const result = await serv.yyyyService();
 
-    const result = await serv.postXxxService(codigo_usuario);
+    res.status(200).json({
+        error: false,
+        status: 200,
+        message: "Ok",
+        data: result,
+        pagination: null,
+    });
+}
+
+// ? VERIFICADA - 27-07-2026
+export async function postIntegracionFacturaController(
+    req: Request,
+    res: Response,
+    next: NextFunction,
+): Promise<void> {
+    const data: IRequestIntegracionFactura = req.body;
+
+    const result = await serv.postIntegracionFacturaService(data);
 
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Se enviaron los documentos correctamente",
-        data: result,
+        message: "Se envio la factura correctamente",
+        //data: result,
         pagination: null,
     });
 }

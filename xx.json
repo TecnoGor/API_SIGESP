@@ -1,0 +1,42 @@
+{
+	"cliente": {
+		"rif": "V129615607",
+		"nombre": "VASQUEZ ANGELICA",
+		"direccion": "AV. BLANDIN LA CASTELLANA ANTIGUO. BANCO DE MARACAIBO",
+		"telefono": "0000000000",
+		"email": "MAIL@MAIL.COM"
+	},
+	"factura": {	
+		"id_factura": 1,
+		"sub_total": 177.63,
+		"base_imp": 177.63,
+		"iva": 28.43,			
+		"total": 206.06,
+		"descripcion": "PRUEBA DE FACTURACION",
+		"fecha_fact": "2025-05-02"
+	},
+	"detalle": [
+		{
+			"id_detalle": 300,
+			"renglon": 1,
+			"id_servicio": 48,
+			"precio": 120.00,
+			"cantidad": 1,
+			"porc_iva": 16,			
+			"iva_detalle": 19.20,						
+			"total_detalle": 139.20,
+			"comentario": ""
+		},
+		{
+			"id_detalle": 301,
+			"renglon": 2,
+			"id_servicio": 60,
+			"precio": 57.63,
+			"cantidad": 1,
+			"porc_iva": 16,			
+			"iva_detalle": 9.23,						
+			"total_detalle": 66.86,
+			"comentario": ""
+		}
+	]
+}
