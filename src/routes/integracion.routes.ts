@@ -4,8 +4,9 @@ import * as midd from "../middlewares/integracion.middleware.js";
 
 const router = Router();
 
-router.get("/yyyy", ctrl.yyyyController);                                                               // ! QUITAR SOLO POR PRUEBAS
+router.get("/yyyy", ctrl.yyyyController);                                                                   // ! QUITAR SOLO POR PRUEBAS
 
-router.post("/factura", midd.valPostBodyIntegracionFactura, ctrl.postIntegracionFacturaController);     // ? VERIFICADA - 27-07-2026
+router.post("/factura", midd.valPostBodyIntegracionFactura, ctrl.postIntegracionFacturaController);         // ? VERIFICADA - 27-07-2026
+// router.post("/nota-credito", midd.valPostBodyIntegracionFactura, ctrl.postIntegracionFacturaController); // ? VERIFICADA - 27-07-2026
 
 export default router;

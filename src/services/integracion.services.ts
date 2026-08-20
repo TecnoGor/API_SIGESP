@@ -76,7 +76,8 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         const mapaDetallesSet = new Set<string>();                  // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
         const mapaCargoSet = new Set<string>();                     // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
         const mapaCompPrincipal = new Set<string>();                // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
-        const mapaCompPresupuesto = new Set<string>();                // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompPresupuesto = new Set<string>();              // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompContable = new Set<string>();                 // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
 
         // ---------------------------------------------------------------------
         // PASO 1: Agregar Clientes
@@ -138,7 +139,7 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         }
 
         // ---------------------------------------------------------------------
-        // PASO 3: Agregar Detalle Fcatura
+        // PASO 3: Agregar Factura Detalle
         // ---------------------------------------------------------------------
         // Obtienes el objeto completo
         const facturaSigesp = mapaFacturasId.get(idFacturaOrigen)!;
@@ -200,7 +201,7 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         }
 
         // ---------------------------------------------------------------------
-        // PASO 4: Agregar Comprobanmte Principal
+        // PASO 5: Agregar Comprobanmte Principal
         // ---------------------------------------------------------------------
         // Accedes a cada valor de forma individual
         const numFactSigesp = facturaSigesp.numfact;
@@ -219,10 +220,10 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
 
             // Valore para la funcion función fn_api_integracion_sigesp_cmp
             const valuesCompPrincipal = [
-                comprobante,
-                factura.fecha_fact,
-                descripcion,
-                rif,
+                comprobante.trim(),
+                factura.fecha_fact.trim(),
+                descripcion.trim(),
+                rif.trim(),
                 factura.total
             ];
 
@@ -235,18 +236,20 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         // ---------------------------------------------------------------------
         // PASO 5: Agregar Detalle Comprobanmte Presupuesto
         // ---------------------------------------------------------------------
-        // Clave única para el Comprobanmte Principal
+        // Clave única para el Comprobanmte Presupuesto
         const claveCompPresupuesto = `0001-CXCFAC-${comprobante}`;
+
+        // FACTURA N° 138146
 
         if (!mapaCompPresupuesto.has(claveCompPresupuesto)) {
             const queryCompPresupuesto = `SELECT public.fn_api_integracion_spi_dt_cmp($1, $2, $3, $4);`;
 
-            // Valore para la funcion función fn_api_integracion_sigesp_cmp
+            // Valore para la funcion función fn_api_integracion_spi_dt_cmp
             const valuesCompPresupuesto = [
-                comprobante,
-                factura.fecha_fact,
-                descripcion,
-                factura.total
+                comprobante.trim(),
+                factura.fecha_fact.trim(),
+                descripcion.trim(),
+                factura.sub_total
             ];
 
             await clientSigesp.query(queryCompPresupuesto, valuesCompPresupuesto);
@@ -255,19 +258,46 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
             mapaCompPresupuesto.add(claveCompPresupuesto);
         }
 
+        // ---------------------------------------------------------------------
+        // PASO 6: Agregar Contabilidad - Cuenta por Cobrar (Débito), Cuenta de Ingreso (Crédito) y IVA por Pagar (Crédito)
+        // ---------------------------------------------------------------------
+        // Clave única para el Comprobanmte Contable
+        const claveCompContable = `0001-CXCFAC-${comprobante}`;
 
+        if (!mapaCompContable.has(claveCompContable)) {
+            const queryCompContable = `SELECT public.fn_api_integracion_scg_dt_cmp($1, $2, $3, $4, $5, $6);`;
+
+            // Valore para la funcion función fn_api_integracion_scg_dt_cmp
+            const valuesCompContable = [
+                comprobante.trim(),
+                factura.fecha_fact.trim(),
+                descripcion.trim(),
+                factura.sub_total,
+                factura.iva,
+                factura.total
+            ];
+
+            await clientSigesp.query(queryCompContable, valuesCompContable);
+
+            // Marcamos el detalle como insertado
+            mapaCompContable.add(claveCompContable);
+        }
 
         // retornamos las filas
         //return filasPlanas as any;
         
         // =========================================================================
-        // PASO 6: Si todo el bucle pasó correctamente, hacemos COMMIT
+        // PASO ????: Si todo el bucle pasó correctamente, hacemos COMMIT
         // =========================================================================
         await clientSigesp.query('COMMIT');
 
         console.log('Integración completada exitosamente.');
         
     } catch (error: any) {
+        console.log('*************************************')
+        console.log(error)
+        console.log('*************************************')
+
         // En caso de cualquier error, descalcula e ignora todo
         await clientSigesp.query('ROLLBACK');
 
@@ -276,10 +306,10 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         }
 
         if (error?.response?.data) {
-            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postCrearNCService");    
+            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postIntegracionFacturaService");    
         }
 
-        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCrearNCService");
+        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postIntegracionFacturaService");
     } finally {
         // Siempre liberamos el cliente al pool
         clientSigesp.release();

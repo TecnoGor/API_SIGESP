@@ -33,7 +33,7 @@ export async function postIntegracionFacturaController(
         error: false,
         status: 201,
         message: "Se envio la factura correctamente",
-        //data: result,
+        data: result,
         pagination: null,
     });
 }

@@ -75,35 +75,35 @@ export const valPostBodyIntegracionFactura = [
         .isObject()
         .withMessage('El objeto factura es obligatorio'),
     
-    body("factura.idfactura")
+    body("factura.id_factura")
         .notEmpty()
-        .withMessage("El parametro [idfactura] es requerido.")
+        .withMessage("El parametro [id_factura] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [idfactura] debe ser numérico.")
+        .withMessage("El parametro [id_factura] debe ser numérico.")
         .bail()
         .isInt({ min: 1 })
-        .withMessage("El parametro [idfactura] debe ser un numero entero mayor a 0."),
+        .withMessage("El parametro [id_factura] debe ser un numero entero mayor a 0."),
 
-    body("factura.subtotal")
+    body("factura.sub_total")
         .notEmpty()
-        .withMessage("El parametro [subtotal] es requerido.")
+        .withMessage("El parametro [sub_total] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [subtotal] debe ser numérico.")
+        .withMessage("El parametro [sub_total] debe ser numérico.")
         .bail()
         .isFloat({ min: 0 })
-        .withMessage("El parametro [subtotal] debe ser un numero mayor a 0."),
+        .withMessage("El parametro [sub_total] debe ser un numero mayor a 0."),
 
-    body("factura.baseimp")
+    body("factura.base_imp")
         .notEmpty()
-        .withMessage("El parametro [baseimp] es requerido.")
+        .withMessage("El parametro [base_imp] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [baseimp] debe ser numérico.")
+        .withMessage("El parametro [base_imp] debe ser numérico.")
         .bail()
         .isFloat({ min: 0 })
-        .withMessage("El parametro [baseimp] debe ser un numero mayor a 0."),
+        .withMessage("El parametro [base_imp] debe ser un numero mayor a 0."),
 
     body("factura.iva")
         .notEmpty()
@@ -134,19 +134,30 @@ export const valPostBodyIntegracionFactura = [
         .isLength({ max: 250 })
         .withMessage('El campo [descripcion] debe tener máximo 250 caracteres.'),
 
+    body("factura.fecha_fact")
+        .trim()
+        .notEmpty()
+        .withMessage("El campo [fecha_fact] es requerido.")
+        .bail()
+        .isString()
+        .withMessage("El campo [fecha_fact] debe ser de tipo String.")
+        .bail()        
+        .isLength({ max: 250 })
+        .withMessage("El campo [fecha_fact] debe tener maximo 250 caracteres."),
+
     body('detalle')
         .isArray({ min: 1 })
         .withMessage('Detalle debe ser un arreglo con al menos un ítem'),
 
-    body("detalle.*.iddetalle")
+    body("detalle.*.id_detalle")
         .notEmpty()
-        .withMessage("El parametro [iddetalle] es requerido.")
+        .withMessage("El parametro [id_detalle] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [iddetalle] debe ser numérico.")
+        .withMessage("El parametro [id_detalle] debe ser numérico.")
         .bail()
         .isInt({ min: 1 })
-        .withMessage("El parametro [iddetalle] debe ser un numero entero mayor a 0."),
+        .withMessage("El parametro [id_detalle] debe ser un numero entero mayor a 0."),
 
     body("detalle.*.renglon")
         .notEmpty()
@@ -158,15 +169,15 @@ export const valPostBodyIntegracionFactura = [
         .isInt({ min: 1 })
         .withMessage("El parametro [renglon] debe ser un numero entero mayor a 0."),  
 
-    body("detalle.*.idservicio") // TODO: VALIDAR QUE EL ID SERVICIO EXISTA EN LA TABLA DE INTEGRACION ENTRE SIGESP Y SISPVEN
+    body("detalle.*.id_servicio") // TODO: VALIDAR QUE EL ID SERVICIO EXISTA EN LA TABLA DE INTEGRACION ENTRE SIGESP Y SISPVEN
         .notEmpty()
-        .withMessage("El parametro [idservicio] es requerido.")
+        .withMessage("El parametro [id_servicio] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [idservicio] debe ser numérico.")
+        .withMessage("El parametro [id_servicio] debe ser numérico.")
         .bail()
         .isInt({ min: 1 })
-        .withMessage("El parametro [idservicio] debe ser un numero entero mayor a 0."),  
+        .withMessage("El parametro [id_servicio] debe ser un numero entero mayor a 0."),  
 
     body("detalle.*.precio")
         .notEmpty()
@@ -198,25 +209,25 @@ export const valPostBodyIntegracionFactura = [
         .isFloat({ min: 0 })
         .withMessage("El parametro [porc_iva] debe ser un numero mayor a 0."),
 
-    body("detalle.*.iva")
+    body("detalle.*.iva_detalle")
         .notEmpty()
-        .withMessage("El parametro [iva] es requerido.")
+        .withMessage("El parametro [iva_detalle] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [iva] debe ser numérico.")
+        .withMessage("El parametro [iva_detalle] debe ser numérico.")
         .bail()
         .isFloat({ min: 0 })
-        .withMessage("El parametro [iva] debe ser un numero mayor a 0."),   
+        .withMessage("El parametro [iva_detalle] debe ser un numero mayor a 0."),   
         
-    body("detalle.*.total")
+    body("detalle.*.total_detalle")
         .notEmpty()
-        .withMessage("El parametro [total] es requerido.")
+        .withMessage("El parametro [total_detalle] es requerido.")
         .bail()
         .isNumeric()
-        .withMessage("El parametro [total] debe ser numérico.")
+        .withMessage("El parametro [total_detalle] debe ser numérico.")
         .bail()
         .isFloat({ min: 0 })
-        .withMessage("El parametro [total] debe ser un numero mayor a 0."),   
+        .withMessage("El parametro [total_detalle] debe ser un numero mayor a 0."),   
 
     body("detalle.*.comentario")
         .optional({ checkFalsy: true })
@@ -228,7 +239,7 @@ export const valPostBodyIntegracionFactura = [
         .withMessage('El campo [comentario] debe tener máximo 250 caracteres.'),
 
     checkExact([], {
-        message: "Solo estan permitidos los campos requeridos [rif, nombre, direccion, telefono, email, idfactura, subtotal, baseimp, iva, total, iddetalle, renglon, idservicio, precio, cantidad, porc_iva, ivadetalle, totaldetalle] y los campos opcionales [descripcion, comentario]."    }),
+        message: "Solo estan permitidos los campos requeridos [rif, nombre, direccion, telefono, email, id_factura, sub_total, base_imp, iva, total, fecha_fact, id_detalle, renglon, id_servicio, precio, cantidad, porc_iva, iva_detalle, total_detalle] y los campos opcionales [descripcion, comentario]."    }),
 
     (req: Request, res: Response, next: NextFunction) => {
         func.ValidaDatos(req, res, next, "middleware:valPostBodyIntegracionFactura");

@@ -418,8 +418,8 @@ AS $function$
 	BEGIN
 		-- 
 		v_numpririf := SUBSTRING(prm_rif FROM 2 FOR LENGTH(prm_rif) - 2);
-		v_tipperrif := LEFT(rif, 1);
-		v_numterrif := RIGHT(rif, 1);
+		v_tipperrif := LEFT(v_numpririf, 1);
+		v_numterrif := RIGHT(v_numpririf, 1);
 
 		-- 1. Buscamos si el cliente ya existe y obtenemos su ID
     	SELECT 	id_cliente 
@@ -563,6 +563,65 @@ AS $function$
 $function$
 ;
 
+-- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(varchar, varchar, varchar, float8, float8, float8);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision, prm_iva double precision, prm_total double precision)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE 
+		v_cuenta_x_cobrar		varchar(25);
+		v_cuenta_ingreso		varchar(25);
+		v_cuenta_x_pagar_iva	varchar(25);
+	BEGIN
+		-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 	
+		v_cuenta_x_cobrar := '1120301000001';	
+		v_cuenta_ingreso := '304990100';
+		v_cuenta_x_pagar_iva := '2149901010002';
+	
+		-- 1. Insertamos el registro Contable - Cuenta por Cobrar (Débito)
+		INSERT INTO public.scg_dt_cmp
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+		VALUES
+			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_x_cobrar, 'CXCFAC', prm_comprobante, 'D', prm_descripcion, prm_total, 0, 'SISPVEN');
+
+		-- 2. Insertamos el registro Contable - Cuenta de Ingreso (Crédito)
+		INSERT INTO public.scg_dt_cmp
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+		VALUES
+			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_ingreso, 'CXCFAC', prm_comprobante, 'H', prm_descripcion, prm_sub_total, 1, 'SISPVEN');
+
+		-- 3. Insertamos el registro Contable - Cuenta IVA por Pagar (Crédito)
+		INSERT INTO public.scg_dt_cmp
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+		VALUES
+			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_x_pagar_iva, 'CXCFAC', prm_comprobante, 'H', prm_descripcion || ' - IVA', prm_iva, 2, 'SISPVEN');
+	END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(varchar, varchar, varchar, float8);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE 
+		v_spi_cuenta	varchar(25);
+
+	BEGIN
+		--	
+		v_spi_cuenta := '304990100';	-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 
+	
+		-- 1. Insertamos el registro
+		INSERT INTO public.sigesp_cmp
+			(codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion, descripcion, monto, orden)
+		VALUES
+			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_sub_total, 1);	
+	END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_integracion_sigesp_cmp(varchar, varchar, varchar, varchar, float8);
 
 CREATE OR REPLACE FUNCTION public.fn_api_integracion_sigesp_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_rif character varying, prm_total double precision)
@@ -588,26 +647,22 @@ $function$
 
 -- DROP FUNCTION public.fn_api_integracion_spi_dt_cmp(varchar, varchar, varchar, float8);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_spi_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_spi_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	DECLARE 
-		v_comprobante 		varchar(30);
-		v_descripcion 		text;
-		--v_descripcion 		text;
-		v_scg_cuenta 		varchar(25);
-		v_spicta 			varchar(25);
+		v_spi_cuenta	varchar(25);
 
 	BEGIN
-		-- buscar el numeo de cuenta en la tabla de cobnfiguarcioon
-		-- prm_spi_cuenta	character varying,	
+		--	
+		v_spi_cuenta := '304990100';	-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 
 	
 		-- 1. Insertamos el registro
 		INSERT INTO public.sigesp_cmp
 			(codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion, descripcion, monto, orden)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), prm_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_total, 1);
+			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_sub_total, 1);	
 	END;
 $function$
 ;
