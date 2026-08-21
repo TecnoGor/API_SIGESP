@@ -20,7 +20,7 @@ export interface FacturaDTO {
     iva: number;
     total: number;
     descripcion?: string;
-    fecha_fact: string;
+    fecha_fact: Date;
 }
 
 export interface DetalleFacturaDTO {

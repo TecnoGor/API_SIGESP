@@ -2,6 +2,8 @@ import { poolSigesp, poolSispven } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IRequestIntegracionFactura } from "../types/IRequestIntegracionFactura.js";
+import type { IServiciosIntegrados } from "../types/IServiciosIntegrados.js";
+import type { IParametrosApi } from "../types/IParametrosApi.js";
 
 // ! QUITAR SOLO POR PRUEBAS
 export async function yyyyService(): Promise<IRequestIntegracionFactura> {
@@ -49,6 +51,283 @@ export async function yyyyService(): Promise<IRequestIntegracionFactura> {
 }
 
 // ? VERIFICADA - 27-07-2026
+export async function postIntegracionFacturaService(data: IRequestIntegracionFactura): Promise<void> {
+    const { cliente, factura, detalle } = data;
+
+    // Obtenemos una conexión dedicada del pool (Servidor SIGESP)
+    const clientSigesp = await poolSigesp.connect();
+
+    try {
+        /*
+        const mapaClientesId = new Map<string, number>();           // Key: RIF -> Value: id_cliente (SIGESP)
+        const mapaFacturasId = new Map<number, { id_fact: number; numfact: number }>();
+        const mapaDetallesSet = new Set<string>();                  // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCargoSet = new Set<string>();                     // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompPrincipal = new Set<string>();                // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompPresupuesto = new Set<string>();              // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        const mapaCompContable = new Set<string>();                 // Key: "id_fact_SIGESP-numrenglon" (Evita renglones duplicados)
+        */
+
+        // ---------------------------------------------------------------------
+        // PASO 1: Verifico si la factura origen de SISPVEN fue registrada anteriormente
+        // ---------------------------------------------------------------------       
+        // Ejecutamos el Stored Procedure / Función para verificar si existe la factura 
+        const queryVerifica = `SELECT public.fn_api_integracion_verifica_factura_origen($1) AS existe;`;
+
+        const respVerifica = await clientSigesp.query(queryVerifica, [factura.id_factura]);
+
+        const existeFactura = respVerifica.rows[0].existe;
+
+        if (existeFactura) {
+            throw new AppError('Factura Registrada Anteriormente', 401, "service:postIntegracionFacturaService");
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 2: Obtengo los Codigo de Servicios integrados
+        // ---------------------------------------------------------------------       
+        // Ejecutamos el Stored Procedure / Función para verificar si existe la factura 
+        const queryServicios = `SELECT * FROM public.fn_api_integracion_servicios();`;
+
+        const respServicio = await clientSigesp.query<IServiciosIntegrados>(queryServicios);
+
+        if (respServicio.rows.length === 0) {
+            throw new AppError('No existen servicios integrados registrados', 400, "service:postIntegracionFacturaService");
+        }
+
+        // Creamos el Map: [Clave (servicio_id), Valor (Objeto con los 3 datos)]
+        const serviciosIntegrados = new Map<number, IServiciosIntegrados>(
+            respServicio.rows.map(row => [
+                Number(row.servicio_id), 
+                {
+                    servicio_id: Number(row.servicio_id),
+                    coddetalle: row.coddetalle.trim(),
+                    codunimed: row.codunimed.trim()
+                }
+            ])
+        );
+
+        // ---------------------------------------------------------------------
+        // PASO 3: Obtengo los Parametros de la Api
+        // ---------------------------------------------------------------------       
+        // Ejecutamos el Stored Procedure / Función para verificar si existe la factura 
+        const queryParametros = `SELECT * FROM public.fn_api_integracion_parametros();`;
+
+        const respParametros = await clientSigesp.query<IParametrosApi>(queryParametros);
+
+        if (respParametros.rows.length === 0) {
+            throw new AppError('No existen parametros integrados registrados', 400, "service:postIntegracionFacturaService");
+        }
+
+        // Extraer directamente la primera (y única) fila
+        const row = respParametros.rows[0];
+
+        const parametrosIntegrados: IParametrosApi = {
+            codcar: row.codcar.trim(),
+            cuenta_x_cobrar: row.cuenta_x_cobrar.trim(),
+            cuenta_ingreso: row.cuenta_ingreso.trim(),
+            cuenta_x_pagar_iva: row.cuenta_x_pagar_iva.trim(),
+            cuenta_partida_ingreso: row.cuenta_partida_ingreso.trim()
+        };
+
+        // ------------------------------------------------------------------------
+        // INICIO DE LA TRANSACCIÓN (Servidor SIGESP)
+        // ------------------------------------------------------------------------
+        await clientSigesp.query('BEGIN');
+
+        // ---------------------------------------------------------------------
+        // PASO 3: Agregar Clientes
+        // ---------------------------------------------------------------------            
+        const rif = cliente.rif.trim()
+
+        const queryCliente = `SELECT public.fn_api_integracion_cxc_clientes($1, $2, $3, $4, $5) AS id_cliente;`;
+
+        // Construimos el array de parametros para clientes
+        const valuesCliente = [
+            rif.trim(),
+            cliente.nombre.trim(),
+            cliente.direccion.trim(),
+            cliente.telefono.trim(),
+            cliente.email.trim()
+        ];
+
+        // Ejecutamos el Stored Procedure / Función para registrar los datos del cliente (Servidor SIGESP)
+        const resCliente = await clientSigesp.query(queryCliente, valuesCliente);
+        const idClienteObtenido = resCliente.rows[0].id_cliente;
+
+        // ---------------------------------------------------------------------
+        // PASO 4: Agregar Factura Encabezado
+        // ---------------------------------------------------------------------    
+        const queryFactura = `SELECT out_id_fact, out_numfact FROM public.fn_api_integracion_cxc_factura($1, $2, $3, $4, $5, $6, $7, $8);`;
+
+        // Construimos el array de parametros
+        const valuesFactura = [
+            idClienteObtenido,
+            factura.id_factura,
+            factura.sub_total,
+            factura.base_imp,
+            factura.iva,
+            factura.total,
+            factura.descripcion?.trim(),
+            factura.fecha_fact
+        ];
+
+        // Ejecutamos el Stored Procedure / Función para registrar los datos del Encabezado de la Factura (Servidor SIGESP)
+        const resFactura = await clientSigesp.query(queryFactura, valuesFactura);
+        const id_fact_sigesp = resFactura.rows[0].out_id_fact;
+        const numfact_sigesp= resFactura.rows[0].out_numfact;
+
+        // ---------------------------------------------------------------------
+        // PASO 5: Agregar Factura Detalle
+        // ---------------------------------------------------------------------
+        // Recorro el array de detalles
+        for (const fila of detalle) {            
+            // 1. Buscamos el servicio en el Map por su servicio_id
+            const servicio = serviciosIntegrados.get(Number(fila.id_servicio));
+
+            if (!servicio) {
+                throw new AppError(`El servicio con ID [${fila.id_servicio}] no se encuentra integrado en el sistema.`, 400, "service:postIntegracionFacturaService");
+            }
+
+            //if (!mapaDetallesSet.has(claveDetalle)) {
+            const queryDetalle = `SELECT public.fn_api_integracion_cxc_detalle($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`;
+
+            // Reemplaza o ajusta estos campos según lo que pide tu función fn_api_integracion_cxc_dt_factura
+            const valuesDetalle = [
+                id_fact_sigesp, 
+                fila.renglon,
+                servicio.coddetalle.trim(),
+                servicio.codunimed.trim(),
+                fila.precio,
+                fila.cantidad,
+                fila.porc_iva,
+                fila.iva_detalle,
+                fila.total_detalle,
+                fila.comentario?.trim()                    
+            ];
+
+            await clientSigesp.query(queryDetalle, valuesDetalle);            
+        }
+
+        // ---------------------------------------------------------------------
+        // PASO 6: Agregar Cargos
+        // ---------------------------------------------------------------------
+        // TODO: OJO OJO OJO - PREGUNTAR SI LA TABLA DE CARGOS VA POR CADA DETALLE QUE EXISTA EN LA FACTURA
+        // TODO: OJO OJO OJO HAY QUE BUSCAR EN UNA TABLA DE CONFIGURACION ESTE CODIGO 10091
+        // Clave única para el Cargo
+        const queryCargo = `SELECT public.fn_api_integracion_cxc_dt_cargos($1, $2, $3, $4, $5, $6);`;
+        
+        // Valore para la funcion función fn_api_integracion_cxc_dt_cargos
+        const valuesCargo = [
+            factura.id_factura,
+            id_fact_sigesp,
+            parametrosIntegrados.codcar.trim(),            
+            factura.base_imp,
+            factura.iva,
+            factura.total
+        ];
+
+        await clientSigesp.query(queryCargo, valuesCargo);
+
+        // ---------------------------------------------------------------------
+        // PASO 7: Agregar Comprobanmte Principal
+        // ---------------------------------------------------------------------
+        // 1. GENERAR NÚMERO DE COMPROBANTE
+        const comprobante = `F-0001-${numfact_sigesp.toString().padStart(13, '0')}`;
+
+		// 2. GENERAR DESCRIPCION DE COMPROBANTE
+		const descripcion = `FACTURA N° ${numfact_sigesp.toString()} ${factura.descripcion?.trim()}`;
+
+        const queryComprobantePrincipal = `SELECT public.fn_api_integracion_sigesp_cmp($1, $2, $3, $4, $5, $6);`;
+
+        // Valore para la funcion función fn_api_integracion_sigesp_cmp
+        const valuesComprobantePrincipal = [
+            factura.id_factura,
+            comprobante.trim(),
+            factura.fecha_fact,
+            descripcion.trim(),
+            rif.trim(),
+            factura.total
+        ];
+
+        console.log(valuesComprobantePrincipal)
+
+
+        await clientSigesp.query(queryComprobantePrincipal, valuesComprobantePrincipal);
+
+        // ---------------------------------------------------------------------
+        // PASO 8: Agregar Detalle Comprobanmte Presupuesto
+        // ---------------------------------------------------------------------
+        // FACTURA N° 138146
+        const queryCompPresupuesto = `SELECT public.fn_api_integracion_spi_dt_cmp($1, $2, $3, $4, $5, $6);`;
+
+        // Valore para la funcion función fn_api_integracion_spi_dt_cmp
+        const valuesCompPresupuesto = [
+            factura.id_factura,
+            comprobante.trim(),
+            parametrosIntegrados.cuenta_partida_ingreso.trim(),  
+            factura.fecha_fact,
+            descripcion.trim(),
+            factura.sub_total
+        ];
+
+        await clientSigesp.query(queryCompPresupuesto, valuesCompPresupuesto);        
+
+        // ---------------------------------------------------------------------
+        // PASO 69: Agregar Contabilidad - Cuenta por Cobrar (Débito), Cuenta de Ingreso (Crédito) y IVA por Pagar (Crédito)
+        // ---------------------------------------------------------------------
+        // Clave única para el Comprobanmte Contable
+        const claveCompContable = `0001-CXCFAC-${comprobante}`;
+
+        const queryCompContable = `SELECT public.fn_api_integracion_scg_dt_cmp($1, $2, $3, $4, $5, $6, $7, $8, $9, $10);`;
+
+        // Valore para la funcion función fn_api_integracion_scg_dt_cmp
+        const valuesCompContable = [
+            factura.id_factura,
+            comprobante.trim(),
+            parametrosIntegrados.cuenta_x_cobrar.trim(),
+            parametrosIntegrados.cuenta_ingreso.trim(),
+            parametrosIntegrados.cuenta_x_pagar_iva.trim(),
+            factura.fecha_fact,
+            descripcion.trim(),
+            factura.sub_total,
+            factura.iva,
+            factura.total
+        ];
+
+        await clientSigesp.query(queryCompContable, valuesCompContable);
+
+        // =========================================================================
+        // PASO ????: Si todo el bucle pasó correctamente, hacemos COMMIT
+        // =========================================================================
+        await clientSigesp.query('COMMIT');
+
+        console.log('Integración completada exitosamente.');
+        
+    } catch (error: any) {
+        console.log('*************************************')
+        console.log(error)
+        console.log('*************************************')
+
+        // En caso de cualquier error, descalcula e ignora todo
+        await clientSigesp.query('ROLLBACK');
+
+        if (error instanceof AppError) {
+            throw error; // ✅ ya tiene statusCode y location
+        }
+
+        if (error?.response?.data) {
+            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postIntegracionFacturaService");    
+        }
+
+        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postIntegracionFacturaService");
+    } finally {
+        // Siempre liberamos el cliente al pool
+        clientSigesp.release();
+    }
+}
+
+// ? RESPALDO 2
+/*
 export async function postIntegracionFacturaService(data: IRequestIntegracionFactura): Promise<void> {
     const { cliente, factura, detalle } = data;
 
@@ -315,9 +594,10 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         clientSigesp.release();
     }
 }
+*/
 
+// ? RESPALDO 1
 /*
-// ? VERIFICADA - 27-07-2026
 export async function postXxxService(codigo_usuario: string): Promise<void> {
     // Obtenemos una conexión dedicada del pool (Servidor SIGESP)
     const clientSigesp = await poolSigesp.connect();

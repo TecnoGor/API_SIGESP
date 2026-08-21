@@ -52,6 +52,21 @@ CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_cg
 CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_cgi USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);
 
 
+-- public.api_integracion_parametros definition
+
+-- Drop table
+
+-- DROP TABLE public.api_integracion_parametros;
+
+CREATE TABLE public.api_integracion_parametros (
+	codcar varchar(25) NOT NULL,
+	cuenta_x_cobrar varchar(25) NOT NULL,
+	cuenta_ingreso varchar(25) NOT NULL,
+	cuenta_x_pagar_iva varchar(25) NOT NULL,
+	cuenta_partida_ingreso varchar(25) NOT NULL
+);
+
+
 -- public.api_integracion_servicios definition
 
 -- Drop table

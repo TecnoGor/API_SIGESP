@@ -412,14 +412,17 @@ AS $function$
 		v_id_cliente 	integer;
 		v_next_num   	integer;
 		v_codcliente 	character varying(20);
-		v_numpririf 	character varying(20);
+		v_rif			character varying(25);
 		v_tipperrif 	character varying(1);
+		v_numpririf 	character varying(20);		
 		v_numterrif 	character varying(1);
 	BEGIN
-		-- 
-		v_numpririf := SUBSTRING(prm_rif FROM 2 FOR LENGTH(prm_rif) - 2);
-		v_tipperrif := LEFT(v_numpririf, 1);
-		v_numterrif := RIGHT(v_numpririf, 1);
+		-- Limpia guiones, puntos y espacios del RIF
+    	v_rif := regexp_replace(prm_rif, '[^a-zA-Z0-9]', '', 'g');
+
+		v_tipperrif := LEFT(v_rif, 1);
+		v_numpririf := SUBSTRING(v_rif FROM 2 FOR LENGTH(v_rif) - 2);		
+		v_numterrif := RIGHT(v_rif, 1);
 
 		-- 1. Buscamos si el cliente ya existe y obtenemos su ID
     	SELECT 	id_cliente 
@@ -448,7 +451,7 @@ AS $function$
 	            ('0001', v_codcliente, v_tipperrif, v_numpririf, v_numterrif, 7, prm_nombre, '',	
 				1, 1, 1, prm_direccion, '', '058', '001', '001', '001', '001',	
 				'1060', '', prm_telefono, prm_email, '', '', 'A', '', 
-				'', '', TO_CHAR(NOW(), 'YYYY-MM-DD'), TO_CHAR(NOW(), 'YYYY-MM-DD'),'ADMINISTRADOR', TO_CHAR(NOW(), 'HH24:MI:SS'))
+				'', '', CURRENT_DATE, CURRENT_DATE,'ADMINISTRADOR', CURRENT_TIME)
 	        RETURNING id_cliente INTO v_id_cliente;			
 		END IF;
 
@@ -458,70 +461,56 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_cxc_detalle(int4, int4, int4, float8, float8, float8, float8, float8, varchar);
+-- DROP FUNCTION public.fn_api_integracion_cxc_detalle(int4, int4, varchar, varchar, float8, float8, float8, float8, float8, varchar);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_detalle(prm_id_fact integer, prm_renglon integer, prm_id_servicio integer, prm_precio double precision, prm_cantidad double precision, prm_porc_iva double precision, prm_iva double precision, prm_total double precision, prm_comentario character varying)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_detalle(prm_id_fact integer, prm_renglon integer, prm_coddetalle character varying, prm_codunimed character varying, prm_precio double precision, prm_cantidad double precision, prm_porc_iva double precision, prm_iva double precision, prm_total double precision, prm_comentario character varying)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
-	DECLARE 
-		v_coddetalle	character varying(25);
-		v_codunimed		character varying(25);
 	BEGIN
-		-- 1. Obtenemos el Codigo del Detalle y el Codigo de la Unidad de Medida del Servicio
-		SELECT 	COALESCE(a.coddetalle, ''),
- 				COALESCE(a.codunimed, '')
-		INTO 	v_coddetalle, 
-				v_codunimed
-		FROM 	public.api_integracion_servicios AS a
-		WHERE	a.servicio_id = prm_id_servicio;
-
 		-- 2. Insertamos el registro
 		INSERT INTO public.cxc_detalle
 			(id_fact, id_tipodetalle, codproceso, renglon, coddetalle, codunimed, codalm, cantidad_detalle, 
 			precio_detalle, porciva, iva_detalle, neto_detalle, comentario, codproc, canmay, precioneto_detalle)
 		VALUES
-			(prm_id_fact, 'SERVI', 'FACTURA', prm_renglon, v_coddetalle, v_codunimed, '0000000000', prm_cantidad,  
+			(prm_id_fact, 'SERVI', 'FACTURA', prm_renglon, prm_coddetalle, prm_codunimed, '0000000000', prm_cantidad,  
 			prm_precio, prm_porc_iva, prm_iva, prm_total, prm_comentario, 'FAC', 1, prm_precio);
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_cxc_dt_cargos(int4, float8, float8, float8);
+-- DROP FUNCTION public.fn_api_integracion_cxc_dt_cargos(int4, int4, varchar, float8, float8, float8);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_dt_cargos(prm_id_fact integer, prm_base_imp double precision, prm_iva double precision, prm_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_dt_cargos(prm_idfacturaorigen integer, prm_id_fact integer, prm_codcar character varying, prm_base_imp double precision, prm_iva double precision, prm_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	DECLARE 
-		v_codcar			bpchar(5);
 		v_formula			varchar(254);
 		v_porcar 			float8;
 		v_scg_cuenta 		varchar(25);
 		v_spicta 			varchar(25);
 
 	BEGIN
-		-- OJO OJO OJO - ESTO DEBE SER UN PARAMETRO DE LA BASE DE DATOS
-		v_codcar := '10091';
-		
-		SELECT	c.codcar, c.formula, c.porcar, c.scg_cuenta, c.spicta 
-		INTO 	v_codcar, v_formula, v_porcar, v_scg_cuenta, v_spicta			
+		--		
+		SELECT	c.formula, c.porcar, c.scg_cuenta, c.spicta 
+		INTO 	v_formula, v_porcar, v_scg_cuenta, v_spicta			
 		FROM 	public.sigesp_cargos c
 		WHERE 	c.codemp = '0001'
-		AND		c.codcar = v_codcar;
+		AND		c.codcar = prm_codcar;
 
 		-- 1. Insertamos el registro
 		INSERT INTO public.cxc_dt_cargos
-			(codemp, id_fact, codproceso, codcar, formula, porcar, monbasimp, monimp, montot, scg_cuenta, spi_cuenta, id_doc)
+			(codemp, id_fact, codproceso, codcar, formula, porcar, monbasimp, monimp, montot, scg_cuenta, spi_cuenta, id_doc, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', prm_id_fact, 'FACTURA', v_codcar, v_formula, v_porcar, prm_base_imp, prm_iva, prm_total, v_scg_cuenta, v_spicta, 0);
+			('0001', prm_id_fact, 'FACTURA', prm_codcar, v_formula, v_porcar, prm_base_imp, prm_iva, prm_total, v_scg_cuenta, v_spicta, 0, 'SISPVEN', prm_idfacturaorigen);	
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_cxc_factura(in int4, in int4, in float8, in float8, in float8, in float8, in varchar, in varchar, out int4, out int4);
+-- DROP FUNCTION public.fn_api_integracion_cxc_factura(in int4, in int4, in float8, in float8, in float8, in float8, in varchar, in timestamp, out int4, out int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_factura(prm_id_cliente integer, prm_idfacturaorigen integer, prm_subtot double precision, prm_baseimp double precision, prm_iva double precision, prm_total double precision, prm_descripfact character varying, prm_fecha_fact character varying, OUT out_id_fact integer, OUT out_numfact integer)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_cxc_factura(prm_id_cliente integer, prm_idfacturaorigen integer, prm_subtot double precision, prm_baseimp double precision, prm_iva double precision, prm_total double precision, prm_descripfact character varying, prm_fecha_fact timestamp without time zone, OUT out_id_fact integer, OUT out_numfact integer)
  RETURNS record
  LANGUAGE plpgsql
 AS $function$
@@ -553,116 +542,138 @@ AS $function$
 		INSERT INTO public.cxc_factura
 			(codemp, codproceso, numfact, codfact, numcont, id_cliente, id_transp, id_estfact, id_condpago, id_vend, 
 			codmon, tascam, tipopecont, codcaj, fecfact, fecvenc, subtot, iva, otros, baseimp, total,
-			descripfact, comentadifact, fecreg, usureg, horareg, codsuc)
+			descripfact, comentadifact, fecreg, usureg, horareg, codsuc, api_modulo, api_id_fact_origen)
 		VALUES
 			('0001', 'FACTURA', out_numfact, v_codfact, v_numcont, prm_id_cliente, 9, 1, 12, 1,
-		 	'001', 1, 'DEV', '0001', prm_fecha_fact, prm_fecha_fact, prm_subtot, prm_iva, 0, prm_baseimp, prm_total,
-			prm_descripfact, '', TO_CHAR(NOW(), 'YYYY-MM-DD'), 'ADMINISTRADOR', TO_CHAR(NOW(), 'HH24:MI:SS'), '0001')		
+		 	'001', 1, 'DEV', '0001', prm_fecha_fact::date, prm_fecha_fact::date, prm_subtot, prm_iva, 0, prm_baseimp, prm_total,
+			prm_descripfact, '', prm_fecha_fact::date, 'ADMINISTRADOR', prm_fecha_fact::time, '0001', 'SISPVEN', prm_idfacturaorigen)		
 		RETURNING id_fact INTO out_id_fact;
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(varchar, varchar, varchar, float8, float8, float8);
+-- DROP FUNCTION public.fn_api_integracion_parametros();
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision, prm_iva double precision, prm_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_parametros()
+ RETURNS TABLE(codcar character varying, cuenta_x_cobrar character varying, cuenta_ingreso character varying, cuenta_x_pagar_iva character varying, cuenta_partida_ingreso character varying)
+ LANGUAGE plpgsql
+AS $function$
+	BEGIN
+		RETURN QUERY
+		
+		SELECT 
+	        p.codcar::varchar AS codcar,
+			p.cuenta_x_cobrar::varchar AS cuenta_x_cobrar,
+			p.cuenta_ingreso::varchar AS cuenta_ingreso,
+			p.cuenta_x_pagar_iva::varchar AS cuenta_x_pagar_iva,
+			p.cuenta_partida_ingreso::varchar AS cuenta_partida_ingreso
+	    FROM 
+	        public.api_integracion_parametros p;
+		END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(int4, varchar, varchar, varchar, varchar, timestamp, varchar, float8, float8, float8);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_cuenta_x_cobrar character varying, prm_cuenta_ingreso character varying, prm_cuenta_x_pagar_iva character varying, prm_fecha_fact timestamp without time zone, prm_descripcion character varying, prm_sub_total double precision, prm_iva double precision, prm_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
-	DECLARE 
-		v_cuenta_x_cobrar		varchar(25);
-		v_cuenta_ingreso		varchar(25);
-		v_cuenta_x_pagar_iva	varchar(25);
 	BEGIN
-		-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 	
-		v_cuenta_x_cobrar := '1120301000001';	
-		v_cuenta_ingreso := '304990100';
-		v_cuenta_x_pagar_iva := '2149901010002';
-	
 		-- 1. Insertamos el registro Contable - Cuenta por Cobrar (Débito)
 		INSERT INTO public.scg_dt_cmp
-			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_x_cobrar, 'CXCFAC', prm_comprobante, 'D', prm_descripcion, prm_total, 0, 'SISPVEN');
+			('0001', 'CXCFAC', prm_comprobante, prm_fecha_fact::date, prm_cuenta_x_cobrar, 'CXCFAC', prm_comprobante, 'D', prm_descripcion, prm_total, 0, 'SISPVEN', prm_idfacturaorigen);
 
 		-- 2. Insertamos el registro Contable - Cuenta de Ingreso (Crédito)
 		INSERT INTO public.scg_dt_cmp
-			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_ingreso, 'CXCFAC', prm_comprobante, 'H', prm_descripcion, prm_sub_total, 1, 'SISPVEN');
+			('0001', 'CXCFAC', prm_comprobante, prm_fecha_fact::date, prm_cuenta_ingreso, 'CXCFAC', prm_comprobante, 'H', prm_descripcion, prm_sub_total, 1, 'SISPVEN', prm_idfacturaorigen);
 
 		-- 3. Insertamos el registro Contable - Cuenta IVA por Pagar (Crédito)
 		INSERT INTO public.scg_dt_cmp
-			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo)
+			(codemp, procede, comprobante, fecha, sc_cuenta, procede_doc, documento, debhab, descripcion, monto, orden, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_cuenta_x_pagar_iva, 'CXCFAC', prm_comprobante, 'H', prm_descripcion || ' - IVA', prm_iva, 2, 'SISPVEN');
+			('0001', 'CXCFAC', prm_comprobante, prm_fecha_fact::date, prm_cuenta_x_pagar_iva, 'CXCFAC', prm_comprobante, 'H', prm_descripcion || ' - IVA', prm_iva, 2, 'SISPVEN', prm_idfacturaorigen);
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(varchar, varchar, varchar, float8);
+-- DROP FUNCTION public.fn_api_integracion_servicios();
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision)
- RETURNS void
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_servicios()
+ RETURNS TABLE(servicio_id integer, coddetalle character varying, codunimed character varying)
  LANGUAGE plpgsql
 AS $function$
-	DECLARE 
-		v_spi_cuenta	varchar(25);
-
 	BEGIN
-		--	
-		v_spi_cuenta := '304990100';	-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 
-	
-		-- 1. Insertamos el registro
-		INSERT INTO public.sigesp_cmp
-			(codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion, descripcion, monto, orden)
-		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_sub_total, 1);	
-	END;
+		RETURN QUERY
+		
+		SELECT 
+	        s.servicio_id::integer as servicio_id,
+			s.coddetalle,
+			s.codunimed
+	    FROM 
+	        public.api_integracion_servicios s;
+		END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_sigesp_cmp(varchar, varchar, varchar, varchar, float8);
+-- DROP FUNCTION public.fn_api_integracion_sigesp_cmp(int4, varchar, varchar, varchar, varchar, float8);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_sigesp_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_rif character varying, prm_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_sigesp_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_rif character varying, prm_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	DECLARE 
 		v_comprobante 		varchar(30);
 		v_descripcion 		text;
-		--v_descripcion 		text;
 		v_scg_cuenta 		varchar(25);
 		v_spicta 			varchar(25);
 
 	BEGIN
 		-- 1. Insertamos el registro
 		INSERT INTO public.sigesp_cmp
-			(codemp, procede, comprobante, fecha, descripcion, tipo_comp, tipo_destino, cod_pro, ced_bene, total, codusu)
+			(codemp, procede, comprobante, fecha, descripcion, tipo_comp, tipo_destino, cod_pro, ced_bene, total, codusu, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), prm_descripcion, 1, 'B', '----------', prm_rif, prm_total, 'ADMINISTRADOR');
+			('0001', 'CXCFAC', prm_comprobante, prm_fecha_fact::date, prm_descripcion, 1, 'B', '----------', prm_rif, prm_total, 'ADMINISTRADOR', 'SISPVEN', prm_idfacturaorigen);	
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_spi_dt_cmp(varchar, varchar, varchar, float8);
+-- DROP FUNCTION public.fn_api_integracion_spi_dt_cmp(int4, varchar, varchar, timestamp, varchar, float8);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_spi_dt_cmp(prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_sub_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_spi_dt_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_spi_cuenta character varying, prm_fecha_fact timestamp without time zone, prm_descripcion character varying, prm_sub_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
-	DECLARE 
-		v_spi_cuenta	varchar(25);
-
 	BEGIN
-		--	
-		v_spi_cuenta := '304990100';	-- OJO OJO OJO - Buscar el numero de cuenta en la tabla de cobnfiguarcioon 
-	
 		-- 1. Insertamos el registro
-		INSERT INTO public.sigesp_cmp
-			(codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion, descripcion, monto, orden)
+		INSERT INTO public.spi_dt_cmp
+			(codemp, procede, comprobante, fecha, spi_cuenta, procede_doc, documento, operacion, descripcion, monto, orden, api_modulo, api_id_fact_origen)
 		VALUES
-			('0001', 'CXCFAC', prm_comprobante, TO_CHAR(prm_fecha_fact, 'YYYY-MM-DD'), v_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_sub_total, 1);	
+			('0001', 'CXCFAC', prm_comprobante, prm_fecha_fact::date, prm_spi_cuenta, 'CXCFAC', prm_comprobante, 'DEV', prm_descripcion, prm_sub_total, 1, 'SISPVEN', prm_idfacturaorigen);	
+	END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_integracion_verifica_factura_origen(int4);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_verifica_factura_origen(prm_id_fact_origen integer)
+ RETURNS boolean
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE
+		v_existe boolean;
+	BEGIN
+		SELECT EXISTS (
+			SELECT 	1 
+			FROM 	public.cxc_factura 
+			WHERE 	api_id_fact_origen = prm_id_fact_origen
+		) INTO v_existe;
+		
+		RETURN v_existe;
 	END;
 $function$
 ;

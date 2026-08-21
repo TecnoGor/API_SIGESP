@@ -21,8 +21,8 @@ export const valPostBodyIntegracionFactura = [
         .isLength({ max: 15 })
         .withMessage("El campo [rif] debe tener maximo 15 caracteres.")
         .bail()
-        .matches(/^[JGVEP]\d{8,9}$/i)
-        .withMessage('Formato de RIF inválido (ej. V1234567890)'),
+        .matches(/^[JGVECP]\d{6,10}$/i)
+        .withMessage('Formato de RIF inválido (ej. V6078369 o J123456780)'),
 
     body("cliente.nombre")
         .trim()
