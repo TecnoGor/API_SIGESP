@@ -78,8 +78,8 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
         // 👇 NUEVO: Envolvemos SOLO la base de datos en un try-catch independiente
         try {
             // Elimina los datos de la configuracion Local
-            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
-            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
+            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7, $8, $9)';
+            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, 'SIGESP', null]);
         
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.

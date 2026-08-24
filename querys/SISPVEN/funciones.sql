@@ -1,7 +1,7 @@
 -- DROP FUNCTION public.fn_api_integracion_get_facturas_por_enviar();
 
 CREATE OR REPLACE FUNCTION public.fn_api_integracion_get_facturas_por_enviar()
- RETURNS TABLE(rif character varying, nombre character varying, direccion character varying, telefono character varying, email character varying, id_factura integer, sub_total double precision, base_imp double precision, iva double precision, total double precision, descripcion character varying, fecha_fact character varying, id_detalle integer, renglon integer, id_servicio integer, precio double precision, cantidad integer, porc_iva double precision, iva_detalle double precision, total_detalle double precision, comentario character varying)
+ RETURNS TABLE(rif character varying, nombre character varying, direccion character varying, telefono character varying, email character varying, id_factura integer, sub_total double precision, base_imp double precision, iva double precision, total double precision, descripcion character varying, fecha_fact timestamp without time zone, id_detalle integer, renglon integer, id_servicio integer, precio double precision, cantidad integer, porc_iva double precision, tipo_impuesto character varying, iva_detalle double precision, total_detalle double precision, comentario character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -29,8 +29,8 @@ AS $function$
 			(f.monto_total - f.iva)::float AS base_imp,
 			f.iva::float AS iva,	
 			f.monto_total::float AS total,
-			'PRUEBA DE INTEGRACION CON SIGESP'::varchar AS descripcion,
-			TO_CHAR(f.created_at, 'YYYY-MM-DD')::varchar AS fecha_fact,
+			'PRUEBA DE INTEGRACION CON SIGESP'::varchar AS descripcion,			
+			f.created_at AS fecha_fact,
 			
 			-- DETALLE
 			d.facturacion_id::int AS id_detalle,
@@ -38,17 +38,25 @@ AS $function$
 			d.servicio_id::int AS id_servicio, 
 			(f.monto_total - f.iva)::float AS precio,
 			1::int AS cantidad,
-			16::float AS porc_iva,
+			
+			(CASE 
+			    WHEN f.tipo_documento = 'E' THEN 0
+			    ELSE 16
+			END)::float AS "porc_iva",
+			
+			f.tipo_documento ::varchar AS tipo_impuesto,
 			f.iva::float AS iva_detalle,
 			f.monto_total::float AS total_detalle,
 			''::varchar AS comentario			
 		FROM 
 			public.facturaciones f
-			INNER JOIN public.facturacion_detalles d ON f.facturacion_id = d.facturacion_detalle_id
+			INNER JOIN public.facturacion_detalles d ON f.facturacion_id = d.facturacion_id
 		WHERE	
 			f.monto_total > 0
+		AND	f.xxx = 0
+		AND f.tipo_documento IN ('E', 'G', 'J')
 		ORDER BY 
-			f.facturacion_id LIMIT 1;
+			f.facturacion_id  LIMIT 1;
 	END;
 $function$
 ;

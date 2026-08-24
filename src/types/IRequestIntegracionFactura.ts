@@ -19,7 +19,7 @@ export interface FacturaDTO {
     base_imp: number;
     iva: number;
     total: number;
-    descripcion?: string;
+    descripcion?: string | null;
     fecha_fact: Date;
 }
 
@@ -30,7 +30,8 @@ export interface DetalleFacturaDTO {
     precio: number;
     cantidad: number;
     porc_iva: number;
+    tipo_impuesto: string;
     iva_detalle: number;
     total_detalle: number;
-    comentario?: string;
+    comentario?: string | null;
 }

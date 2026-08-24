@@ -2,8 +2,6 @@ import { body, checkExact } from "express-validator";
 import * as func from "../utils/funcionesGlobales.js";
 import type { NextFunction, Request, Response } from "express";
 
-
-// TODO: REVISAR LOS NOMBRE DE LOS CAMPOS POPRQUE SE MODIFICARON
 // ? VERIFICADA - 27-07-2026
 export const valPostBodyIntegracionFactura = [
     body('cliente')

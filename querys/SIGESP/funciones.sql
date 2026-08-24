@@ -171,7 +171,7 @@ AS $function$
 			))::varchar AS "descripcionProducto",
 			
 			(CASE 
-			    WHEN d.porciva IS NULL THEN 'G'
+			    WHEN d.porciva IS NULL THEN 'E'
 			    WHEN d.porciva::INT = 16 THEN 'G'
 			    WHEN d.porciva::INT = 8  THEN 'R'
 			    WHEN d.porciva::INT = 31 THEN 'A'
@@ -573,6 +573,38 @@ AS $function$
 $function$
 ;
 
+-- DROP FUNCTION public.fn_api_integracion_rpc_beneficiario(varchar, varchar, varchar, varchar, varchar);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_rpc_beneficiario(prm_rif character varying, prm_nombre character varying, prm_direccion character varying, prm_telefono character varying, prm_email character varying)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE 
+		v_sc_cuenta	character 	varying(25);
+		v_count					integer;		
+	BEGIN
+		-- OJO OJO OJO - BUSCAR EL NUMERO DE CUENTA
+    	v_sc_cuenta := '2110199050001';
+
+		-- 1. Buscamos si el beneficiario ya existe
+    	SELECT 	COUNT(*) 
+		INTO 	v_count
+    	FROM 	public.rpc_beneficiario
+    	WHERE 	TRIM(ced_bene) = TRIM(prm_rif)
+    	LIMIT 	1;
+
+		-- 2. Si no existe, 
+    	IF v_count <= 0 THEN
+			-- Insertamos el registro y capturamos el ID autoincremental
+			INSERT INTO public.rpc_beneficiario
+				(codemp, ced_bene, codpai, codest, codmun, codpar, nombene, dirbene, telbene, email, sc_cuenta, codbansig)
+			VALUES
+				('0001', prm_rif, '058', '001', '001', '001', prm_nombre, prm_direccion, prm_telefono, prm_email, v_sc_cuenta, '---');
+		END IF;		
+	END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_integracion_scg_dt_cmp(int4, varchar, varchar, varchar, varchar, timestamp, varchar, float8, float8, float8);
 
 CREATE OR REPLACE FUNCTION public.fn_api_integracion_scg_dt_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_cuenta_x_cobrar character varying, prm_cuenta_ingreso character varying, prm_cuenta_x_pagar_iva character varying, prm_fecha_fact timestamp without time zone, prm_descripcion character varying, prm_sub_total double precision, prm_iva double precision, prm_total double precision)
@@ -604,7 +636,7 @@ $function$
 -- DROP FUNCTION public.fn_api_integracion_servicios();
 
 CREATE OR REPLACE FUNCTION public.fn_api_integracion_servicios()
- RETURNS TABLE(servicio_id integer, coddetalle character varying, codunimed character varying)
+ RETURNS TABLE(servicio_id integer, coddetalle character varying, nombre character varying, codunimed character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -613,6 +645,7 @@ AS $function$
 		SELECT 
 	        s.servicio_id::integer as servicio_id,
 			s.coddetalle,
+			s.nombre,
 			s.codunimed
 	    FROM 
 	        public.api_integracion_servicios s;
@@ -620,9 +653,9 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_integracion_sigesp_cmp(int4, varchar, varchar, varchar, varchar, float8);
+-- DROP FUNCTION public.fn_api_integracion_sigesp_cmp(int4, varchar, timestamp, varchar, varchar, float8);
 
-CREATE OR REPLACE FUNCTION public.fn_api_integracion_sigesp_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_fecha_fact character varying, prm_descripcion character varying, prm_rif character varying, prm_total double precision)
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_sigesp_cmp(prm_idfacturaorigen integer, prm_comprobante character varying, prm_fecha_fact timestamp without time zone, prm_descripcion character varying, prm_rif character varying, prm_total double precision)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
@@ -742,17 +775,17 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_post_integracion_documentos(int4, int4, int4, varchar, varchar, text, bpchar);
+-- DROP FUNCTION public.fn_api_post_integracion_documentos(int4, int4, int4, varchar, varchar, text, varchar, varchar, int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character)
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_fact_origen integer)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 		INSERT INTO api_integracion_documentos_cgi 
-			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu) 
+			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_fact_origen) 
 		VALUES 
-			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu);		
+			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_fact_origen);
 	END;
 $function$
 ;
