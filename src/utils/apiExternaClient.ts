@@ -59,7 +59,6 @@ apiExternaClient.interceptors.request.use(async (config) => {
     // Si el token esta vacio solicitamos uno directo
     if (!token) {
         // console.log('⚠️ ***** SIN TOKEN *****');
-        
         token = await obtenerYGuardarNuevoToken();
     }
 

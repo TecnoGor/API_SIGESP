@@ -20,24 +20,33 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
     try {
         // Busco los datos de la factura
         const query = 'SELECT * FROM fn_api_get_factura_detalle($1)';
-        const result = await poolSigesp.query<IFacturaDetalle>(query, [id_fact]);    
+        const result = await poolSigesp.query<IFacturaDetalle>(query, [id_fact]);
 
         // verifico si existe la factura
         if (result.rows.length <= 0 ) {
             throw new AppError('Factura no encontrada', 404, "service:postAgregarService");
         }
 
+        //
+        const encFactura = result.rows[0];
+
         // Datos del detalle
-        const detalle = result.rows.map(row => {
+        const detFactura = result.rows.map(row => {
             return {
                 codigoProducto: row.coddetalle.trim(),
                 nombreProducto: row.nombreProducto.trim(),
                 descripcionProducto: row.descripcionProducto.trim(),
-                tipoImpuesto: row.tipoImpuesto,
+                tipoImpuesto: row.tipoImpuesto.trim(),
                 cantidadAdquirida: Number(row.cantidadAdquirida), 
                 precioProducto: row.precioProducto
             }
         });
+
+        // Se validan los campos requeridos
+        await validarPayloadFactura(encFactura, detFactura);
+
+        // 5. Formateo de Tasa Estricto a 4 Decimales en String (Ej: "342.8633")
+        const tasaFormateada = Number(encFactura.tasa_del_dia).toFixed(4);
 
         // Construir objeto para enviar
         const payLoad = {
@@ -45,13 +54,15 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
             cantidadFactura: 1,
             facturas: [
                 {
-                    numeroFactura: result.rows[0].numfact,
-                    documentoIdentidadCliente: result.rows[0].numpririf.trim(),
-                    nombreRazonSocialCliente: result.rows[0].nombre_cliente.trim(),
-                    correoCliente: result.rows[0].emailcliente.trim(),
-                    direccionCliente: result.rows[0].dircliente.trim(),
-                    telefonoCliente: result.rows[0].telcliente.trim(),
-                    productos: detalle,
+                    numeroFactura: encFactura.numfact.trim(),
+                    documentoIdentidadCliente: encFactura.numpririf.trim(),
+                    nombreRazonSocialCliente: encFactura.nombre_cliente.trim(),
+                    correoCliente: encFactura.emailcliente.trim(),
+                    direccionCliente: encFactura.dircliente.trim(),
+                    telefonoCliente: encFactura.telcliente.trim(),
+                    productos: detFactura,
+                    tasa_del_dia: tasaFormateada,
+                    fecha_tasa: encFactura.fecha_tasa.trim(),
                     order_payment_methods: []
                 }
             ]
@@ -80,7 +91,7 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
             // Elimina los datos de la configuracion Local
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7, $8, $9)';
             await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, 'SIGESP', null]);
-        
+
         } catch (dbError) {
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
             // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
@@ -161,3 +172,67 @@ export async function postAnularService(id_fact: number): Promise<any> {
     }
 }
 
+// ? VERIFICADA - 27-07-2026
+async function validarPayloadFactura(encFactura: IFacturaDetalle, detFactura: any[]): Promise<void> {
+    // 1. Validar Documento de Identidad (V, E, P, J, G, C + min 5 dígitos)
+    const rifRegex = /^[VEPJGC]\d{5,}$/i;
+    
+    if (!rifRegex.test(encFactura.numpririf.trim())) {
+        throw new AppError(`El documento de identidad ('${encFactura.numpririf.trim()}') no cumple con el formato fiscal requerido.`, 400, "service:validarPayloadFactura");
+    }
+
+    // 2. Validar Correo Electrónico
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+    if (!emailRegex.test(encFactura.emailcliente.trim())) {
+        throw new AppError(`El correo del cliente ('${encFactura.emailcliente.trim()}') no posee un formato válido (user@domain).`, 400, "service:validarPayloadFactura");
+    }
+
+    // 3. Validar Tasa del Día (Formato: 3 enteros y 4 decimales con punto. Ej: "342.8633" o "056.6500")
+    // Obtener fecha de hoy en formato YYYY-MM-DD (Zona horaria Venezuela / Local)
+    const hoyStr = new Date().toLocaleDateString('sv-SE');
+
+    // Extraer valores de la consulta SQL
+    let tasaRaw: number | null = encFactura.tasa_del_dia;
+    let fechaRaw: string | null = encFactura.fecha_tasa; // Viene como 'YYYY-MM-DD' o null
+
+    if (!tasaRaw || tasaRaw === null || tasaRaw === undefined || tasaRaw <= 0 || !fechaRaw || fechaRaw.trim().length <= 0 || fechaRaw.trim() !== hoyStr) {
+        throw new AppError("La tasa oficial del dia está desactualizada o no esta configurada.", 400, "service:postAgregarService");
+    }    
+
+    // Tasa: Formato número decimal con punto a 4 decimales (Ej: 342.8633) SIN ceros a la izquierda
+    const tasaRegex = /^\d{1,3}\.\d{4}$/;
+    
+    if (!tasaRegex.test(tasaRaw.toString())) {
+        throw new AppError(`La tasa del día ('${tasaRaw}') debe tener formato estrictamente de 3 enteros y 4 decimales con punto (ej: '342.8633').`, 400, "service:validarPayloadFactura");
+    }
+
+    const fechaRegex = /^(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2})$/;
+    
+    if (!fechaRegex.test(fechaRaw)) {
+        throw new AppError(`La fecha de la tasa ('${fechaRaw}') no tiene un formato válido (DD-MM-YYYY o YYYY-MM-DD).`, 400, "service:validarPayloadFactura");
+    }
+
+    // Asignación de nuevos valores a la estructura
+    encFactura.tasa_del_dia = Number(tasaRaw); 
+    encFactura.fecha_tasa = hoyStr;
+
+    // 4. Validar Detalle
+    if (!detFactura || detFactura.length === 0) {
+        throw new AppError('La factura debe tener al menos un producto asociado.', 400, "service:validarPayloadFactura");
+    }
+
+    for (const prod of detFactura) {
+        // 5. Validar Detalle
+        if (prod.cantidadAdquirida <= 0 || prod.cantidadAdquirida > 1000.00) {
+            throw new AppError(`La cantidad del producto '${prod.codigoProducto}' (${prod.cantidadAdquirida}) debe ser mayor a 0 y menor o igual a 1000.00.`, 400, "service:validarPayloadFactura");
+        }
+
+        // 5. Valida que el precio mantenga la coma como separador decimal
+        const precioRegex = /^\d+(,\d{1,2})?$/;
+        
+        if (!precioRegex.test(prod.precioProducto)) {
+            throw new AppError(`El precio del producto '${prod.codigoProducto}' (${prod.precioProducto}) debe usar coma como separador decimal (máximo 2 decimales).`, 400, "service:validarPayloadFactura");
+        }
+    }
+}

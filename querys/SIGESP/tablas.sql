@@ -65,7 +65,9 @@ CREATE TABLE public.api_integracion_parametros (
 	cuenta_x_cobrar varchar(25) NOT NULL,
 	cuenta_ingreso varchar(25) NOT NULL,
 	cuenta_x_pagar_iva varchar(25) NOT NULL,
-	cuenta_partida_ingreso varchar(25) NOT NULL
+	cuenta_partida_ingreso varchar(25) NOT NULL,
+	tasa_del_dia float8 NULL,
+	fecha_tasa date NULL
 );
 
 

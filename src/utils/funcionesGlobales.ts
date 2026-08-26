@@ -2,8 +2,8 @@ import {type NextFunction, type Request, type Response } from "express";
 import bcryptjs from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { validationResult } from "express-validator";
-import { AppError } from "../utils/appError.js";
 import type { IPayLoadToken } from "../types/IPayLoadToken.js";
+import { AppError } from "../utils/appError.js";
 
 // Mapa en memoria para documentos en proceso
 const documentosEnProceso = new Set<string>();

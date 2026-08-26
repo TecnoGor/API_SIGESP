@@ -13,13 +13,13 @@ export const poolSigesp = new Pool({
 
 // 1. Creamos y EXPORTAMOS el pool afuera de la función
 // De esta forma, podrás importarlo en tus controladores para hacer consultas.
-export const poolSispven = new Pool({
-    user: process.env.APP_DB_SISPVEN_USER,
-    host: process.env.APP_DB_SISPVEN_HOST,
-    database: process.env.APP_DB_SISPVEN_DATABASE,
-    password: process.env.APP_DB_SISPVEN_PASSWORD,
-    port: parseInt((process.env.APP_DB_SISPVEN_PORT as string) || "5432")
-});
+// export const poolSispven = new Pool({
+//     user: process.env.APP_DB_SISPVEN_USER,
+//     host: process.env.APP_DB_SISPVEN_HOST,
+//     database: process.env.APP_DB_SISPVEN_DATABASE,
+//     password: process.env.APP_DB_SISPVEN_PASSWORD,
+//     port: parseInt((process.env.APP_DB_SISPVEN_PORT as string) || "5432")
+// });
 
 // TIP 2: Manejo de errores en conexiones inactivas (Idle)
 // Si la base de datos se cae MIENTRAS la app está corriendo, esto evita que Node haga crash.
@@ -30,10 +30,10 @@ poolSigesp.on('error', (err, client) => {
 
 // TIP 2: Manejo de errores en conexiones inactivas (Idle)
 // Si la base de datos se cae MIENTRAS la app está corriendo, esto evita que Node haga crash.
-poolSispven.on('error', (err, client) => {
-    console.error('❌ Error inesperado en un cliente inactivo de SISPVEN PostgreSQL', err);
-    process.exit(-1);
-});
+// poolSispven.on('error', (err, client) => {
+//     console.error('❌ Error inesperado en un cliente inactivo de SISPVEN PostgreSQL', err);
+//     process.exit(-1);
+// });
 
 export async function conexionSigespPostgresSql() {
     try {     
@@ -57,24 +57,24 @@ export async function conexionSigespPostgresSql() {
     }
 }
 
-export async function conexionSispvenPostgresSql() {
-    try {     
-        console.log('Intentando conectar a SISPVEN PostgreSQL...');
+// export async function conexionSispvenPostgresSql() {
+//     try {     
+//         console.log('Intentando conectar a SISPVEN PostgreSQL...');
 
-        // 2. Forzamos la conexión pidiendo un cliente al pool
-        const client = await poolSispven.connect();
+//         // 2. Forzamos la conexión pidiendo un cliente al pool
+//         const client = await poolSispven.connect();
         
-        console.log(`✅ Conectado con éxito a la Base de Datos SISPVEN: ${process.env.APP_DB_SISPVEN_DATABASE}`);
+//         console.log(`✅ Conectado con éxito a la Base de Datos SISPVEN: ${process.env.APP_DB_SISPVEN_DATABASE}`);
         
-        // 3. Liberamos el cliente de vuelta al pool para que no se quede colgado
-        client.release();
+//         // 3. Liberamos el cliente de vuelta al pool para que no se quede colgado
+//         client.release();
         
-    } catch (error) {
-        const message =
-            error instanceof Error
-                ? `❌ Error al conectar con SISPVEN PostgresSQL: ${error.message.trim()}`
-                : `❌ Error desconocido al conectar con SISPVEN PostgresSQL`;
+//     } catch (error) {
+//         const message =
+//             error instanceof Error
+//                 ? `❌ Error al conectar con SISPVEN PostgresSQL: ${error.message.trim()}`
+//                 : `❌ Error desconocido al conectar con SISPVEN PostgresSQL`;
 
-        throw new AppError(message, 500, "db:conexionSispvenPostgresSql");
-    }
-}
+//         throw new AppError(message, 500, "db:conexionSispvenPostgresSql");
+//     }
+// }

@@ -1,4 +1,4 @@
-import { poolSigesp, poolSispven } from "../database/db.js";
+import { poolSigesp /*, poolSispven*/ } from "../database/db.js";
 import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IRequestIntegracionFactura } from "../types/IRequestIntegracionFactura.js";
@@ -7,51 +7,51 @@ import type { IParametrosApi } from "../types/IParametrosApi.js";
 import type { IResponseIntegracion } from "../types/IResponseIntegracion.js";
 import type { IFacturaDetalle } from "../types/IFacturaDetalle.js";
 
-// ! QUITAR SOLO POR PRUEBAS
-export async function yyyyService(): Promise<IRequestIntegracionFactura> {
-    // PASO 1: Ejecutamos el Stored Procedure / Función para obtener la data (Clientes + Encabezado + Detalle) (Servidor SYSPVEN)
-    const query = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
-    const result = await poolSispven.query<any>(query);
-    const datos = result.rows[0];
+// // ! QUITAR SOLO POR PRUEBAS
+// export async function yyyyService(): Promise<IRequestIntegracionFactura> {
+//     // PASO 1: Ejecutamos el Stored Procedure / Función para obtener la data (Clientes + Encabezado + Detalle) (Servidor SYSPVEN)
+//     const query = 'SELECT * FROM fn_api_integracion_get_facturas_por_enviar()';
+//     const result = await poolSispven.query<any>(query);
+//     const datos = result.rows[0];
 
-     // Datos del detalle
-    const detalle = result.rows.map((row: any) => {
-        return {
-            id_detalle:  Number(row.id_detalle), 
-			renglon: Number(row.renglon), 
-			id_servicio: Number(row.id_servicio), 
-			precio: Number(row.precio), 
-			cantidad:  Number(row.cantidad), 
-			porc_iva:  Number(row.porc_iva), 
-            tipo_impuesto: row.tipo_impuesto.trim(),
-			iva_detalle:  Number(row.iva_detalle), 
-			total_detalle:  Number(row.total_detalle), 
-			comentario: row.comentario.trim(),
-        }
-    });
+//      // Datos del detalle
+//     const detalle = result.rows.map((row: any) => {
+//         return {
+//             id_detalle:  Number(row.id_detalle), 
+// 			renglon: Number(row.renglon), 
+// 			id_servicio: Number(row.id_servicio), 
+// 			precio: Number(row.precio), 
+// 			cantidad:  Number(row.cantidad), 
+// 			porc_iva:  Number(row.porc_iva), 
+//             tipo_impuesto: row.tipo_impuesto.trim(),
+// 			iva_detalle:  Number(row.iva_detalle), 
+// 			total_detalle:  Number(row.total_detalle), 
+// 			comentario: row.comentario.trim(),
+//         }
+//     });
 
-    const resultado = {
-        cliente: {
-            "rif": datos.rif,
-			"nombre": datos.nombre,
-			"direccion": datos.direccion,
-			"telefono": datos.telefono,
-			"email": datos.email
-        },
-        factura: {
-            "id_factura": datos.id_factura,
-			"sub_total": datos.sub_total,
-			"base_imp": datos.base_imp,
-			"iva": datos.iva,
-			"total": datos.total,
-			"descripcion": datos.descripcion,
-            "fecha_fact": datos.fecha_fact
-        },
-        detalle: detalle
-    }
+//     const resultado = {
+//         cliente: {
+//             "rif": datos.rif,
+// 			"nombre": datos.nombre,
+// 			"direccion": datos.direccion,
+// 			"telefono": datos.telefono,
+// 			"email": datos.email
+//         },
+//         factura: {
+//             "id_factura": datos.id_factura,
+// 			"sub_total": datos.sub_total,
+// 			"base_imp": datos.base_imp,
+// 			"iva": datos.iva,
+// 			"total": datos.total,
+// 			"descripcion": datos.descripcion,
+//             "fecha_fact": datos.fecha_fact
+//         },
+//         detalle: detalle
+//     }
 
-    return resultado;
-}
+//     return resultado;
+// }
 
 // ? VERIFICADA - 27-07-2026
 export async function postIntegracionFacturaService(data: IRequestIntegracionFactura): Promise<void> {

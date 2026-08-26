@@ -11,4 +11,6 @@ export interface IFacturaDetalle {
     emailcliente: string;
     dircliente: string;
     telcliente: string;   
+    tasa_del_dia: number; 
+    fecha_tasa: string;
 }
