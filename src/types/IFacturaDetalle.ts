@@ -13,4 +13,5 @@ export interface IFacturaDetalle {
     telcliente: string;   
     tasa_del_dia: number; 
     fecha_tasa: string;
+    num_control?: string | null;
 }

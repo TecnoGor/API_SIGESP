@@ -15,7 +15,7 @@ export async function postCrearNCController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Nota de Creditro creada correctamente",
+        message: "Nota de Crédito creada correctamente",
         data: result,
         pagination: null,
     });
@@ -35,7 +35,7 @@ export async function postCrearNCParcialController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Nota de Creditro Parcial creada correctamente",
+        message: "Nota de Crédito Parcial creada correctamente",
         data: result,
         pagination: null,
     });

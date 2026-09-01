@@ -49,7 +49,7 @@ export async function postAgregarRetencionIsrlController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Retencion creada correctamente",
+        message: "Retención creada correctamente",
         data: result,
         pagination: null,
     });
@@ -69,7 +69,7 @@ export async function postAgregarRetencionIvaController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Retencion creada correctamente",
+        message: "Retención creada correctamente",
         data: result,
         pagination: null,
     });

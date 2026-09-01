@@ -30,13 +30,13 @@ CREATE TABLE public.api_configuracion_cgi (
 );
 
 
--- public.api_integracion_documentos_fiscales definition
+-- public.api_integracion_documentos_cgi definition
 
 -- Drop table
 
--- DROP TABLE public.api_integracion_documentos_fiscales;
+-- DROP TABLE public.api_integracion_documentos_cgi;
 
-CREATE TABLE public.api_integracion_documentos_fiscales (
+CREATE TABLE public.api_integracion_documentos_cgi (
 	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
 	id_fact int4 NOT NULL,
 	numfact int4 NOT NULL,
@@ -47,30 +47,11 @@ CREATE TABLE public.api_integracion_documentos_fiscales (
 	fecreg timestamptz DEFAULT now() NOT NULL,
 	codusu bpchar(30) NULL,
 	api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
-	api_id_origen int4 NULL,
+	api_id_fact_origen int4 NULL,
 	CONSTRAINT api_integracion_documentos_cgi_pkey PRIMARY KEY (id)
 );
-CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, numfact) WHERE ((codtipdoc)::text = 'FACTURA'::text);
-CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);
-
-
--- public.api_integracion_enc_retenciones definition
-
--- Drop table
-
--- DROP TABLE public.api_integracion_enc_retenciones;
-
-CREATE TABLE public.api_integracion_enc_retenciones (
-	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
-	codtipdoc varchar(10) NOT NULL,
-	num_control varchar(25) NOT NULL,
-	url_pdf text NOT NULL,
-	fecreg timestamptz DEFAULT now() NOT NULL,
-	codusu bpchar(30) NULL,
-	api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
-	api_id_origen int4 NULL,
-	CONSTRAINT api_integracion_enc_retenciones_pkey PRIMARY KEY (id)
-);
+CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_cgi USING btree (id_fact, codtipdoc, numfact) WHERE ((codtipdoc)::text = 'FACTURA'::text);
+CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_cgi USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);
 
 
 -- public.api_integracion_parametros definition

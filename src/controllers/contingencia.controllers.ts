@@ -31,7 +31,7 @@ export async function postCargarDocumentosEnviadosController(
     res.status(201).json({
         error: false,
         status: 201,
-        message: "Se cargaron los documentos correctamente",
+        message: "Se cargaron los documentos fiscales correctamente",
         data: result,
         pagination: null,
     });

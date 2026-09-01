@@ -61,20 +61,25 @@ export async function postAgregarRetencionIsrlService(numcom: string, codigo_usu
     func.bloquearDocumento(documento);
 
     try {
-        // Busco los datos de la retencion
-        const query = 'SELECT * FROM fn_api_get_retencion_islr($1)';
+        // 👇 PASO 1. Busco los datos de la retencion
+        const query = 'SELECT * FROM fn_api_get_retencion_islr_detalle($1)';
         const result = await poolSigesp.query<IRetencionIslr>(query, [numcom]);    
 
         // verifico si existe la retencion
         if (result.rows.length <= 0 ) {
-            throw new AppError('Retencion no encontrada', 404, "service:postAgregarRetencionIsrlService");
+            throw new AppError('Retención no encontrada', 404, "service:postAgregarRetencionIsrlService");
         }
 
+        // TODO: PASAR ESE PARAMETRO 3 A UNA BASE DE DATOS. (PASARLO A LAS VALIDACIONES)
         // Verifico la cantidad de facturas asociadas a la retencion. No puede ser mayor a 3 facturas
-        // TODO: PASAR ESE PARAMETRO 3 A UNA BASE DE DATOS.
         if (result.rows.length > 3 ) {
-            throw new AppError('La Retencion solo pertmite un máximo de 3 facturas por documento', 404, "service:postAgregarRetencionIsrlService");
+            throw new AppError('La Retención solo pertmite un máximo de 3 facturas por documento', 404, "service:postAgregarRetencionIsrlService");
         }
+
+
+        // Datos del Encabezado (Cliente)
+        const encabezadoRet = result.rows[0];
+
 
         // Datos del detalle de la retencion
         const detalleRet = result.rows.map(row => {
@@ -122,7 +127,7 @@ export async function postAgregarRetencionIsrlService(numcom: string, codigo_usu
             throw new AppError(`${response.data.message.trim()} ${response.data.invoice_errors[0]}`, 409, "service:postAgregarRetencionIsrlService");
         }
 
-        // TODO: FALTA GUARDAR/REGISTRAR LA RESPUESTA EN UNA TABLA INTERMEDIA COMO api_integracion_documentos_cgi        
+        // TODO: FALTA GUARDAR/REGISTRAR LA RESPUESTA EN UNA TABLA INTERMEDIA COMO api_integracion_documentos_fiscales        
         /*
         // Guarda los datos del documento enviado        
         const prm_id_fact = id_fact;
@@ -136,7 +141,7 @@ export async function postAgregarRetencionIsrlService(numcom: string, codigo_usu
         // 👇 NUEVO: Envolvemos SOLO la base de datos en un try-catch independiente
         try {
             // Elimina los datos de la configuracion Local
-            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
+            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7)';
             await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         
         } catch (dbError) {
@@ -186,7 +191,7 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
 
     try {
         // Busco los datos de la retencion
-        const query = 'SELECT * FROM fn_api_get_retencion_iva($1)';
+        const query = 'SELECT * FROM fn_api_get_retencion_iva_detalle($1)';
         const result = await poolSigesp.query<IRetencionIva>(query, [numcom]);    
 
         // verifico si existe la retencion
@@ -260,7 +265,7 @@ export async function postAgregarRetencionIvaService(numcom: string, codigo_usua
         // 👇 NUEVO: Envolvemos SOLO la base de datos en un try-catch independiente
         try {
             // Elimina los datos de la configuracion Local
-            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7)';
+            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7)';
             await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu]);
         
         } catch (dbError) {

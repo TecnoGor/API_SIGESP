@@ -1,6 +1,6 @@
 // ? VERIFICADA - 27-07-2026
 export interface INotaCreditoDetalle {
-    numfact:number;
+    numfact:string;
     id_doc:number;
     coddoc: string;
     numdoc: number;
@@ -8,4 +8,5 @@ export interface INotaCreditoDetalle {
     coddetalle: string;
     cantidad_detdoc: number;
     descripcionProducto: string;
+    num_control?: string | null;
 }

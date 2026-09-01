@@ -104,7 +104,7 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         // PASO 3: Obtengo los Parametros de la Api
         // ---------------------------------------------------------------------       
         // Ejecutamos el Stored Procedure / Función para verificar si existe la factura 
-        const queryParametros = `SELECT * FROM public.fn_api_integracion_parametros();`;
+        const queryParametros = `SELECT * FROM public.fn_api_get_integracion_parametros();`;
 
         const respParametros = await clientSigesp.query<IParametrosApi>(queryParametros);
 
@@ -388,7 +388,7 @@ export async function postIntegracionFacturaService(data: IRequestIntegracionFac
         // 👇 NUEVO: Envolvemos SOLO la base de datos en un try-catch independiente
         try {
             // Elimina los datos de la configuracion Local
-            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos($1, $2, $3, $4, $5, $6, $7, $8, $9)';
+            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7, $8, $9)';
             await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_fact_origen]);
 
         } catch (dbError) {

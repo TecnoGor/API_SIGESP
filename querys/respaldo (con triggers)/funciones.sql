@@ -139,9 +139,9 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_get_nota_credito(int4);
+-- DROP FUNCTION public.fn_api_get_nota_credito_detalle(int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_get_nota_credito(prm_id_doc integer)
+CREATE OR REPLACE FUNCTION public.fn_api_get_nota_credito_detalle(prm_id_doc integer)
  RETURNS TABLE(numfact integer, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, coddetalle character varying, cantidad_detdoc numeric, "descripcionProducto" character varying)
  LANGUAGE plpgsql
 AS $function$
@@ -242,9 +242,9 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_post_integracion_documentos(varchar, text, text, int4, int4);
+-- DROP FUNCTION public.fn_api_post_integracion_documentos_fiscales(varchar, text, text, int4, int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos(prm_num_control character varying, prm_url_pdf text, prm_observacion text, prm_id_fact integer, prm_id_doc integer DEFAULT NULL::integer)
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_fiscales(prm_num_control character varying, prm_url_pdf text, prm_observacion text, prm_id_fact integer, prm_id_doc integer DEFAULT NULL::integer)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$

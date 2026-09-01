@@ -1,66 +1,44 @@
--- DROP FUNCTION public.fn_api_contingencia_documentos_fiscales_enviados(int4, varchar, varchar, varchar, text, timestamp, varchar);
+-- DROP FUNCTION public.fn_api_contingencia_documentos_enviados(int4, varchar, varchar, varchar, text, timestamptz, bpchar);
 
-CREATE OR REPLACE FUNCTION public.fn_api_contingencia_documentos_fiscales_enviados(prm_numfact integer, prm_coddoc character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_fecreg timestamp without time zone, prm_codusu character varying)
+CREATE OR REPLACE FUNCTION public.fn_api_contingencia_documentos_enviados(prm_numfact integer, prm_coddoc character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_fecreg timestamp with time zone, prm_codusu character)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	DECLARE
 	    -- 1. Se deben declarar las variables locales antes del BEGIN
-	    VAR_ID_FACT 		INTEGER;
-	    VAR_ID_DOC  		INTEGER;
-	    VAR_NUMFACT 		INTEGER;
-		VAR_MODULO			VARCHAR;
-		VAR_ID_FACT_ORIGEN	INTEGER;
-		VAR_ID_DOC_ORIGEN	INTEGER;
+	    VAR_ID_FACT INTEGER;
+	    VAR_ID_DOC  INTEGER;
+	    VAR_NUMFACT INTEGER;
 	BEGIN
 	    IF (prm_codtipdoc = 'FACTURA') THEN
 			-- 1. Busca el id_fact de la factura
-			SELECT 	f.id_fact,
-					UPPER(TRIM(COALESCE(NULLIF(f.api_modulo, ''), 'SIGESP'))),
-					f.api_id_fact_origen	 
-			INTO 	VAR_ID_FACT,
-					VAR_MODULO,
-					VAR_ID_FACT_ORIGEN 
-			FROM 	cxc_factura f 
-			WHERE 	f.numfact = prm_numfact;
-
-			IF FOUND THEN
-				-- 2. Inserta atómicamente ignorando duplicados
-		        INSERT INTO api_integracion_documentos_fiscales 
-					(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg, codusu, api_modulo, api_id_origen) 
-		        VALUES 
-					(VAR_ID_FACT, prm_numfact, null, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu, VAR_MODULO, VAR_ID_FACT_ORIGEN)
-		        ON CONFLICT 
-					(id_fact, codtipdoc, numfact) WHERE codtipdoc = 'FACTURA'
-		        DO NOTHING;
-			END IF;			
+			SELECT f.id_fact INTO VAR_ID_FACT FROM cxc_factura f WHERE f.numfact = prm_numfact;
+			
+			-- 2. Inserta atómicamente ignorando duplicados
+	        INSERT INTO api_integracion_documentos_cgi 
+				(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg, codusu) 
+	        VALUES 
+				(VAR_ID_FACT, prm_numfact, null, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu)
+	        ON CONFLICT 
+				(id_fact, codtipdoc, numfact) WHERE codtipdoc = 'FACTURA'
+	        DO NOTHING;
 		ELSE
 			-- 1. Busca los datos de la note de credito
-			SELECT 	d.id_fact, 
-					d.id_doc, 
-					f.numfact,
-					UPPER(TRIM(COALESCE(NULLIF(d.api_modulo, ''), 'SIGESP'))),
-					d.api_id_doc_origen	  
-			INTO 	VAR_ID_FACT, 
-					VAR_ID_DOC, 
-					VAR_NUMFACT,
-					VAR_MODULO,
-					VAR_ID_DOC_ORIGEN 
+			SELECT 	d.id_fact, d.id_doc, f.numfact 
+			INTO 	VAR_ID_FACT, VAR_ID_DOC, VAR_NUMFACT 
 			FROM 	cxc_documento d 
 					INNER JOIN cxc_factura f ON d.id_fact = f.id_fact 
-			WHERE 	d.coddoc = prm_coddoc;		
-
-			IF FOUND THEN
-				-- 2. Inserta atómicamente ignorando duplicados
-		        INSERT INTO api_integracion_documentos_fiscales 
-		            (id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg, codusu, api_modulo, api_id_origen) 
-		        VALUES 
-		            (VAR_ID_FACT, VAR_NUMFACT, VAR_ID_DOC, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu, VAR_MODULO, VAR_ID_DOC_ORIGEN)
-		        ON CONFLICT 
-					(id_fact, codtipdoc, id_doc) WHERE codtipdoc = 'NC'
-		        DO NOTHING;
+			WHERE 	d.coddoc = prm_coddoc;			
+			
+			-- 2. Inserta atómicamente ignorando duplicados
+	        INSERT INTO api_integracion_documentos_cgi 
+	            (id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, fecreg, codusu) 
+	        VALUES 
+	            (VAR_ID_FACT, VAR_NUMFACT, VAR_ID_DOC, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu)
+	        ON CONFLICT 
+				(id_fact, codtipdoc, id_doc) WHERE codtipdoc = 'NC'
+	        DO NOTHING;
 			END IF;
-		END IF;
 	END;
 $function$
 ;
@@ -144,7 +122,7 @@ AS $function$
 			i.numfact,			
 			i.num_control    
 		FROM 
-			api_integracion_documentos_fiscales as i			 
+			api_integracion_documentos_cgi as i			 
 		WHERE  
 			i.codtipdoc = 'FACTURA'
 		AND	i.id_fact=prm_id_fact;
@@ -236,7 +214,7 @@ AS $function$
 			LEFT JOIN siv_articulo a ON a.codart=d.coddetalle AND f.codemp = a.codemp AND d.id_tipodetalle = 'ARTIC' 
 			LEFT JOIN soc_servicios s ON s.codser=d.coddetalle AND d.id_tipodetalle = 'SERVI' 
 			LEFT JOIN cxc_conceptofac c ON c.codconfac=d.coddetalle AND d.id_tipodetalle = 'CONCE'
-			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA',
+			LEFT JOIN api_integracion_documentos_cgi idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA',
 			public.api_integracion_parametros p
 		WHERE  
 			d.codproceso='FACTURA' 
@@ -271,21 +249,16 @@ $function$
 -- DROP FUNCTION public.fn_api_get_nota_credito_detalle(int4);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_nota_credito_detalle(prm_id_doc integer)
- RETURNS TABLE(numfact character varying, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, coddetalle character varying, cantidad_detdoc numeric, "descripcionProducto" character varying, num_control character varying)
+ RETURNS TABLE(numfact integer, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, coddetalle character varying, cantidad_detdoc numeric, "descripcionProducto" character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 	    RETURN QUERY
 
 		SELECT
-			-- 1. Formateo de número de factura a 7 ceros (ej. '0000011')
-    		LPAD(f.numfact::text, 7, '0')::varchar AS numfact,
-
+			f.numfact, 
 			doc.id_doc,
-
-			-- 2. Código recortado a 19 caracteres máximo (Regla API)
-			SUBSTRING(TRIM(doc.coddoc), 1, 19)::varchar AS coddoc,
-
+			doc.coddoc,
 		    doc.numdoc,
 		    doc.id_fact,
 		    dtn.coddetalle,
@@ -303,17 +276,13 @@ AS $function$
 			        ), 'Producto sin nombre'
 			    ),
 			    NULLIF(dtn.comentdoc, '')
-			))::varchar AS "descripcionProducto",
-
-			-- 10. Numero de Control sin espacios
-			TRIM(idc.num_control)::varchar AS num_control
+			))::varchar AS "descripcionProducto"
 		FROM 
 			cxc_documento doc
 			INNER JOIN cxc_dt_documento dtn ON doc.id_doc = dtn.id_doc
 			INNER JOIN cxc_factura f ON doc.id_fact = f.id_fact
 			LEFT JOIN siv_articulo a ON dtn.coddetalle = a.codart
 			LEFT JOIN soc_servicios s ON dtn.coddetalle = s.codser
-			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.id_doc = doc.id_doc AND idc.codtipdoc = 'NC'
 		WHERE 
 		    doc.codemp = '0001'
 		AND	doc.id_doc = prm_id_doc;		
@@ -321,9 +290,9 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_get_retencion_islr_detalle(bpchar);
+-- DROP FUNCTION public.fn_api_get_retencion_islr(bpchar);
 
-CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_islr_detalle(prm_numcom character)
+CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_islr(prm_numcom character)
  RETURNS TABLE(rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, numfac character varying, num_control character varying, fecfac character varying, cmp_codret character varying, consol text, totcmp_con_iva character varying, basimp character varying, sustraendo character varying, porded character varying, cmp_monret character varying, numsol character varying)
  LANGUAGE plpgsql
 AS $function$
@@ -384,7 +353,7 @@ AS $function$
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
 			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp	
-			INNER JOIN api_integracion_documentos_fiscales idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'	
+			INNER JOIN api_integracion_documentos_cgi idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'	
 			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
 			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
@@ -399,9 +368,9 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_get_retencion_iva_detalle(bpchar);
+-- DROP FUNCTION public.fn_api_get_retencion_iva(bpchar);
 
-CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_iva_detalle(prm_numcom character)
+CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_iva(prm_numcom character)
  RETURNS TABLE(rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, fecfac character varying, numfac character varying, num_control character varying, nota_credito character varying, nota_debito character varying, factura_afectada character varying, totcmp_con_iva character varying, compsinderiva character varying, basimp character varying, porimp character varying, porded character varying)
  LANGUAGE plpgsql
 AS $function$
@@ -461,7 +430,7 @@ AS $function$
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
 			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp
-			INNER JOIN api_integracion_documentos_fiscales idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'
+			INNER JOIN api_integracion_documentos_cgi idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'
 			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
 			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
@@ -785,6 +754,27 @@ AS $function$
 $function$
 ;
 
+-- DROP FUNCTION public.fn_api_integracion_verifica_nc_enviada(int4);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_verifica_nc_enviada(prm_id_doc integer)
+ RETURNS boolean
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE
+		v_enviada boolean;
+	BEGIN
+		SELECT EXISTS (
+			SELECT 	1 
+			FROM 	public.api_integracion_documentos_cgi 
+			WHERE 	id_doc = prm_id_doc
+			AND		codtipdoc = 'NC'
+		) INTO v_enviada;
+		
+		RETURN v_enviada;
+	END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_patch_configuracion(text, text);
 
 CREATE OR REPLACE FUNCTION public.fn_api_patch_configuracion(prm_id_cliente text, prm_key text)
@@ -851,15 +841,15 @@ $function$
 
 -- DROP FUNCTION public.fn_api_post_integracion_documentos_fiscales(int4, int4, int4, varchar, varchar, text, varchar, varchar, int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_fiscales(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_origen integer)
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_fiscales(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_fact_origen integer)
  RETURNS void
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
-		INSERT INTO api_integracion_documentos_fiscales 
-			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_origen) 
+		INSERT INTO api_integracion_documentos_cgi 
+			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_fact_origen) 
 		VALUES 
-			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_origen);
+			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_fact_origen);
 	END;
 $function$
 ;
@@ -923,48 +913,6 @@ AS $function$
 	
 		-- 6. Retornamos el id_fact
     	RETURN v_id_fact;
-	END;
-$function$
-;
-
--- DROP FUNCTION public.fn_respaldo_api_integracion_verifica_factura_enviada(int4);
-
-CREATE OR REPLACE FUNCTION public.fn_respaldo_api_integracion_verifica_factura_enviada(prm_id_fact integer)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
-	DECLARE
-		v_enviada boolean;
-	BEGIN
-		SELECT EXISTS (
-			SELECT 	1 
-			FROM 	public.api_integracion_documentos_cgi 
-			WHERE 	id_fact = prm_id_fact
-			AND		codtipdoc = 'FACTURA'
-		) INTO v_enviada;
-		
-		RETURN v_enviada;
-	END;
-$function$
-;
-
--- DROP FUNCTION public.fn_respaldo_api_integracion_verifica_nc_enviada(int4);
-
-CREATE OR REPLACE FUNCTION public.fn_respaldo_api_integracion_verifica_nc_enviada(prm_id_doc integer)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
-	DECLARE
-		v_enviada boolean;
-	BEGIN
-		SELECT EXISTS (
-			SELECT 	1 
-			FROM 	public.api_integracion_documentos_cgi 
-			WHERE 	id_doc = prm_id_doc
-			AND		codtipdoc = 'NC'
-		) INTO v_enviada;
-		
-		RETURN v_enviada;
 	END;
 $function$
 ;
