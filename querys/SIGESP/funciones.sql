@@ -222,8 +222,8 @@ AS $function$
 			-- 9. Datos del cliente sanitizados
 	        UPPER(TRIM(COALESCE(NULLIF(cl.nombre_cliente, ''), 'CLIENTE NO ESPECIFICADO')))::varchar AS nombre_cliente,			
 	        UPPER(TRIM(COALESCE(cl.emailcliente, '')))::varchar AS emailcliente,
-	        UPPER(TRIM(COALESCE(NULLIF(cl.dircliente, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dircliente, 
-	        TRIM(COALESCE(cl.telcliente, '00000000000'))::varchar AS telcliente,
+	        UPPER(TRIM(COALESCE(NULLIF(cl.dircliente, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dircliente,
+			SUBSTRING(regexp_replace(TRIM(COALESCE(cl.telcliente, '00000000000')), '[^a-zA-Z0-9]', '', 'g'), 1, 11) ::varchar AS telcliente,
 			p.tasa_del_dia:: float AS tasa_del_dia,
  			TO_CHAR(p.fecha_tasa, 'YYYY-MM-DD')::varchar AS fecha_tasa,
 
@@ -324,67 +324,69 @@ $function$
 -- DROP FUNCTION public.fn_api_get_retencion_islr_detalle(bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_islr_detalle(prm_numcom character)
- RETURNS TABLE(rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, numfac character varying, num_control character varying, fecfac character varying, cmp_codret character varying, consol text, totcmp_con_iva character varying, basimp character varying, sustraendo character varying, porded character varying, cmp_monret character varying, numsol character varying)
+ RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, cmp_codret character varying, consol text, totcmp_con_iva character varying, basimp character varying, sustraendo character varying, porded character varying, cmp_monret character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, id_codigo_ret character varying, num_control character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 	    RETURN QUERY
 
 		SELECT
-			UPPER(regexp_replace(cmp.rif, '[^a-zA-Z0-9]', '', 'g'))::varchar AS rif,
-
-			UPPER(cmp.nomsujret)::varchar AS nomsujret, 	
-			
+			UPPER(TRIM(cmp.numcom))::varchar as numcom,
+			UPPER(TRIM(sol.numsol))::varchar as numsol,	
+			UPPER(TRIM(dt.numope))::varchar as numope,
+			TRIM(dt.numfac)::varchar AS numfac,
+			TRIM(dt.numcon)::varchar AS numcon,	
+			TO_CHAR(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,
+			TRIM(dt.cmp_codret)::varchar AS cmp_codret,
+			UPPER(TRIM(sol.consol))::text AS consol,	
+			REPLACE(TO_CHAR(COALESCE(dt.totcmp_con_iva, 0.00), 'FM999999990.00'), '.', ',')::varchar AS totcmp_con_iva,
+		  	REPLACE(TO_CHAR(COALESCE(dt.basimp, 0.00), 'FM999999990.00'), '.', ',')::varchar AS basimp,
+		  	REPLACE(TO_CHAR(COALESCE(d.monded, 0.00), 'FM999999990.00'), '.', ',')::varchar AS sustraendo,
+		  	CONCAT(d.porded, '%')::varchar AS porded,
+		  	REPLACE(TO_CHAR(COALESCE(dt.cmp_monret, 0.00), 'FM999999990.00'), '.', ',')::varchar AS cmp_monret,
+			UPPER(regexp_replace(cmp.rif, '[^a-zA-Z0-9]', '', 'g'))::varchar AS rif,	 	
+			UPPER(TRIM(COALESCE(NULLIF(cmp.nomsujret, ''), 'CLIENTE NO ESPECIFICADO')))::varchar AS nomsujret,		
+		
 			UPPER(
-				COALESCE(
-					NULLIF(
-						CASE 
-							WHEN sol.tipproben = 'P' THEN p.email
-							WHEN sol.tipproben = 'B' THEN b.email
-							ELSE '' 
-						END, ''
-					), 'mail@gmail.com'
-			))::varchar AS email,
+				TRIM(
+					COALESCE(
+						NULLIF(
+							CASE 
+								WHEN sol.tipproben = 'P' THEN p.email
+								WHEN sol.tipproben = 'B' THEN b.email
+								ELSE '' 
+							END, ''
+						), ''
+					)
+				)
+			)::varchar AS email,	
 			
-			UPPER(cmp.dirsujret)::varchar AS dirsujret,
-
-			COALESCE(
-			    LPAD(
-			        RIGHT(
-			            regexp_replace(
-			                CASE 
-			                    WHEN sol.tipproben = 'P' THEN p.telpro
-			                    WHEN sol.tipproben = 'B' THEN b.telbene
-			                    ELSE '' 
-			                END, 
-			                '[^0-9]', '', 'g'
-			            ), 
-			            11
-			        ), 
-			        11, '0'
-			    ),
-			    '00000000000'
-			)::varchar AS telefono,
+			UPPER(TRIM(COALESCE(NULLIF(cmp.dirsujret, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dirsujret,
+				
+			SUBSTRING(
+				regexp_replace(
+					TRIM(
+						COALESCE(
+							CASE 
+				                WHEN sol.tipproben = 'P' THEN p.telpro
+				                WHEN sol.tipproben = 'B' THEN b.telbene
+				                ELSE '' 
+				            END, '00000000000'
+						)
+					), '[^a-zA-Z0-9]', '', 'g'
+				), 1, 11
+			) ::varchar AS telefono,
 			
-			dt.numfac,			 
-			idc.num_control::varchar AS num_control,
-			to_char(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,
-			dt.cmp_codret,
-			UPPER(sol.consol)::text AS consol,	
-			replace(to_char(dt.totcmp_con_iva, 'FM999999999990.00'), '.', ',')::varchar AS totcmp_con_iva,			
-			replace(to_char(dt.basimp, 'FM999999999990.00'), '.', ',')::varchar AS basimp,
-			replace(to_char(d.monded, 'FM999999999990.00'), '.', ',')::varchar AS sustraendo,
-			concat(d.porded, '%')::varchar AS porded,
-			replace(to_char(dt.cmp_monret, 'FM999999999990.00'), '.', ',')::varchar AS cmp_monret,
-			--cmp.codret::varchar AS codret 
-			--sol.numsol::varchar AS numsol
-			'001'::varchar AS numsol 
+			'001'::varchar AS id_codigo_ret, -- OJO OJO OJO - ESTE DEBERIA SER EL CODIGO DE LA RETENCION DE LA IMPRENTA
+	
+			-- 10. Numero de Control sin espacios
+			TRIM(idr.num_control)::varchar AS num_control
 		FROM 	
 			scb_cmp_ret cmp
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
 			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp	
-			INNER JOIN api_integracion_documentos_fiscales idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'	
+			LEFT JOIN api_integracion_documentos_retenciones idr ON idr.numcom = dt.numcom AND idr.numsol = dt.numsop AND idr.codtipdoc = 'ISLR'	
 			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
 			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
@@ -402,66 +404,69 @@ $function$
 -- DROP FUNCTION public.fn_api_get_retencion_iva_detalle(bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_iva_detalle(prm_numcom character)
- RETURNS TABLE(rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, fecfac character varying, numfac character varying, num_control character varying, nota_credito character varying, nota_debito character varying, factura_afectada character varying, totcmp_con_iva character varying, compsinderiva character varying, basimp character varying, porimp character varying, porded character varying)
+ RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, nota_credito character varying, nota_debito character varying, factura_afectada character varying, totcmp_con_iva character varying, compsinderiva character varying, basimp character varying, porimp character varying, porded character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, num_control character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 	    RETURN QUERY
 
 		SELECT
-			UPPER(regexp_replace(cmp.rif, '[^a-zA-Z0-9]', '', 'g'))::varchar AS rif,
-
-			UPPER(cmp.nomsujret)::varchar AS nomsujret, 	
-			
-			UPPER(
-				COALESCE(
-					NULLIF(
-						CASE 
-							WHEN sol.tipproben = 'P' THEN p.email
-							WHEN sol.tipproben = 'B' THEN b.email
-							ELSE '' 
-						END, ''
-					), 'mail@gmail.com'
-			))::varchar AS email,
-			
-			UPPER(cmp.dirsujret)::varchar AS dirsujret,
-
-			COALESCE(
-			    LPAD(
-			        RIGHT(
-			            regexp_replace(
-			                CASE 
-			                    WHEN sol.tipproben = 'P' THEN p.telpro
-			                    WHEN sol.tipproben = 'B' THEN b.telbene
-			                    ELSE '' 
-			                END, 
-			                '[^0-9]', '', 'g'
-			            ), 
-			            11
-			        ), 
-			        11, '0'
-			    ),
-			    '00000000000'
-			)::varchar AS telefono,		
-
-			to_char(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,
-			dt.numfac,			 
-			idc.num_control::varchar AS num_control,
+			UPPER(TRIM(cmp.numcom))::varchar as numcom,
+			UPPER(TRIM(sol.numsol))::varchar as numsol,	
+			UPPER(TRIM(dt.numope))::varchar as numope,
+			TRIM(dt.numfac)::varchar AS numfac,
+			TRIM(dt.numcon)::varchar AS numcon,	
+			TO_CHAR(dt.fecfac, 'YYYY-MM-DD')::varchar AS fecfac,	
 			'N/A'::varchar AS nota_credito,
 			'N/A'::varchar AS nota_debito,
 			'N/A'::varchar AS factura_afectada,
+			REPLACE(TO_CHAR(COALESCE(dt.totcmp_con_iva, 0.00), 'FM999999990.00'), '.', ',')::varchar AS totcmp_con_iva,
+			REPLACE(TO_CHAR(COALESCE(0.00, 0.00), 'FM999999990.00'), '.', ',')::varchar AS compsinderiva,
+			REPLACE(TO_CHAR(COALESCE(dt.basimp, 0.00), 'FM999999990.00'), '.', ',')::varchar AS basimp,	
+			concat(REPLACE(TO_CHAR(COALESCE(dt.porimp, 0.00), 'FM999999990.00'), '.', ','), '%')::varchar AS porimp,
+			CONCAT(d.porded, '%')::varchar AS porded,
 			
-			replace(to_char(dt.totcmp_con_iva, 'FM999999999990.00'), '.', ',')::varchar AS totcmp_con_iva,		
-			replace(to_char(0.00, 'FM999999999990.00'), '.', ',')::varchar AS compsinderiva,
-			replace(to_char(dt.basimp, 'FM999999999990.00'), '.', ',')::varchar AS basimp,
-			(replace(to_char(dt.porimp, 'FM999999999990.00'), '.', ',')|| '%')::varchar AS porimp,
-			concat(d.porded, '%')::varchar AS porded
+			UPPER(regexp_replace(cmp.rif, '[^a-zA-Z0-9]', '', 'g'))::varchar AS rif,
+			UPPER(TRIM(COALESCE(NULLIF(cmp.nomsujret, ''), 'CLIENTE NO ESPECIFICADO')))::varchar AS nomsujret, 	
+			
+			UPPER(
+				TRIM(
+					COALESCE(
+						NULLIF(
+							CASE 
+								WHEN sol.tipproben = 'P' THEN p.email
+								WHEN sol.tipproben = 'B' THEN b.email
+								ELSE '' 
+							END, ''
+						), ''
+					)
+				)
+			)::varchar AS email,
+			
+			UPPER(TRIM(COALESCE(NULLIF(cmp.dirsujret, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dirsujret,
+		
+			SUBSTRING(
+				regexp_replace(
+					TRIM(
+						COALESCE(
+							CASE 
+				                WHEN sol.tipproben = 'P' THEN p.telpro
+				                WHEN sol.tipproben = 'B' THEN b.telbene
+				                ELSE '' 
+				            END, '00000000000'
+						)
+					), '[^a-zA-Z0-9]', '', 'g'
+				), 1, 11
+			) ::varchar AS telefono,
+			
+			-- 10. Numero de Control sin espacios
+			TRIM(idr.num_control)::varchar AS num_control
 		FROM 	
 			scb_cmp_ret cmp
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
 			INNER JOIN cxp_solicitudes sol ON dt.codemp = sol.codemp AND dt.numsop = sol.numsol
 			INNER JOIN sigesp_deducciones d ON dt.cmp_codret = d.codded and dt.codemp = d.codemp
-			INNER JOIN api_integracion_documentos_fiscales idc ON idc.numfact = dt.numfac::int AND idc.codtipdoc = 'FACTURA'
+			LEFT JOIN api_integracion_documentos_retenciones idr ON idr.numcom = dt.numcom AND idr.numsol = dt.numsop AND idr.codtipdoc = 'IVA'
 			LEFT JOIN rpc_proveedor p ON sol.tipproben = 'P' AND sol.codemp = p.codemp AND sol.cod_pro = p.cod_pro
 			LEFT JOIN rpc_beneficiario b ON sol.tipproben = 'B' AND sol.codemp = b.codemp AND sol.ced_bene = b.ced_bene
 		WHERE 
@@ -622,6 +627,21 @@ AS $function$
 		 	'001', 1, 'DEV', '0001', prm_fecha_fact::date, prm_fecha_fact::date, prm_subtot, prm_iva, 0, prm_baseimp, prm_total,
 			prm_descripfact, '', prm_fecha_fact::date, 'ADMINISTRADOR', prm_fecha_fact::time, '0001', 'SISPVEN', prm_idfacturaorigen)		
 		RETURNING id_fact INTO out_id_fact;
+	END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_integracion_documentos_retenciones(varchar, varchar, varchar, varchar, text, varchar, varchar, int4);
+
+CREATE OR REPLACE FUNCTION public.fn_api_integracion_documentos_retenciones(prm_numcom character varying, prm_numsol character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_origen integer)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	BEGIN
+		INSERT INTO api_integracion_documentos_retenciones 
+			(numcom, numsol, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_origen) 
+		VALUES 
+			(prm_numcom, prm_numsol, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_origen);
 	END;
 $function$
 ;

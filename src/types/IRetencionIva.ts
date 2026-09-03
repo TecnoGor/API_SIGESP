@@ -1,13 +1,11 @@
 // ? VERIFICADA - 27-07-2026
 export interface IRetencionIva {
-    rif: string;
-    nomsujret: string;
-    email: string;
-    dirsujret: string;  
-    telefono: string;  
-    fecfac: Date;  
+    numcom: string;
+    numsol: string;  
+    numope: string;
     numfac: string;  
-    num_control: string;  
+    numcon: string;  
+    fecfac: string;  
     nota_credito:string;
     nota_debito:string;
     factura_afectada:string;
@@ -15,5 +13,11 @@ export interface IRetencionIva {
     compsinderiva: string;
     basimp: string;
     porimp: string;
-    porded: string;  
+    porded: string;
+    rif: string;
+    nomsujret: string;
+    email: string;
+    dirsujret: string;  
+    telefono: string;      
+    num_control: string;
 }

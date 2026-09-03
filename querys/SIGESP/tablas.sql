@@ -54,23 +54,26 @@ CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_fi
 CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);
 
 
--- public.api_integracion_enc_retenciones definition
+-- public.api_integracion_documentos_retenciones definition
 
 -- Drop table
 
--- DROP TABLE public.api_integracion_enc_retenciones;
+-- DROP TABLE public.api_integracion_documentos_retenciones;
 
-CREATE TABLE public.api_integracion_enc_retenciones (
+CREATE TABLE public.api_integracion_documentos_retenciones (
 	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
+	numcom bpchar(15) NOT NULL,
+	numsol bpchar(15) NOT NULL,
 	codtipdoc varchar(10) NOT NULL,
 	num_control varchar(25) NOT NULL,
 	url_pdf text NOT NULL,
 	fecreg timestamptz DEFAULT now() NOT NULL,
-	codusu bpchar(30) NULL,
+	codusu bpchar(30) NOT NULL,
 	api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
 	api_id_origen int4 NULL,
-	CONSTRAINT api_integracion_enc_retenciones_pkey PRIMARY KEY (id)
+	CONSTRAINT api_integracion_documentos_retenciones_pkey PRIMARY KEY (id)
 );
+CREATE UNIQUE INDEX api_integracion_documentos_retenciones_numcom_idx ON public.api_integracion_documentos_retenciones USING btree (numcom, numsol, codtipdoc);
 
 
 -- public.api_integracion_parametros definition
