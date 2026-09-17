@@ -6,7 +6,7 @@ import type { IResponseFactura } from '../types/IResponseFactura.js';
 import type { IFacturaAnular } from '../types/IFacturaAnular.js';
 import * as func from "../utils/funcionesGlobales.js";
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function postAgregarService(id_fact: number, codigo_usuario: string): Promise<IResponseFactura> {
     // arma el documento que se va a procesar
     const documento = `FACTURA: ${id_fact.toString()}`;
@@ -66,8 +66,9 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
                     direccionCliente: encFactura.dircliente.trim(),
                     telefonoCliente: encFactura.telcliente.trim(),
                     productos: detFactura,
-                    tasa_del_dia: Number(encFactura.tasa_del_dia).toFixed(4),
-                    fecha_tasa: encFactura.fecha_tasa.trim(),
+                    // tasa_del_dia: Number(encFactura.tasa_del_dia).toFixed(4),
+                    tasa_del_dia: encFactura.tasa_del_dia?.trim(),
+                    fecha_tasa: encFactura.fecha_tasa?.trim(),
                     order_payment_methods: []
                 }
             ]
@@ -93,7 +94,7 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
 
         //
         try {
-            // Elimina los datos de la configuracion Local
+            // registra la respuesta de la imprenta digta (N° Control y Url PDF)
             const query1 = 'SELECT * FROM fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7, $8, $9)';
             await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, 'SIGESP', null]);
 
@@ -126,58 +127,58 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
     }
 }
 
-// ? VERIFICADA - 27-07-2026
-export async function postAnularService(id_fact: number): Promise<any> {
-    // arma el documento que se va a procesar
-    const documento = `ANULACION: ${id_fact.toString()}`;
+// ! NO APLICA: 17-09-2026
+// export async function postAnularService(id_fact: number): Promise<any> {
+//     // arma el documento que se va a procesar
+//     const documento = `ANULACION: ${id_fact.toString()}`;
 
-    // Verifica si el documento ya esta en proceso
-    func.VerificaDocumentoEnProceso(documento, "service:postAnularService");
+//     // Verifica si el documento ya esta en proceso
+//     func.VerificaDocumentoEnProceso(documento, "service:postAnularService");
 
-    // Bloquea el documento
-    func.bloquearDocumento(documento)
+//     // Bloquea el documento
+//     func.bloquearDocumento(documento)
 
-    try {
-        // 👇 PASO 1. Busco los datos de la factura que quiere anular
-        const query = 'SELECT * FROM fn_api_get_factura_anular($1)';
-        const result = await poolSigesp.query<IFacturaAnular>(query, [id_fact]);    
+//     try {
+//         // 👇 PASO 1. Busco los datos de la factura que quiere anular
+//         const query = 'SELECT * FROM fn_api_get_factura_anular($1)';
+//         const result = await poolSigesp.query<IFacturaAnular>(query, [id_fact]);    
 
-        // verifico si existe la factura
-        if (result.rows.length <= 0 ) {
-            throw new AppError('Factura no encontrada', 404, "service:postAnularService");
-        }
+//         // verifico si existe la factura
+//         if (result.rows.length <= 0 ) {
+//             throw new AppError('Factura no encontrada', 404, "service:postAnularService");
+//         }
         
-        // 👇 PASO 2. Construir objeto para enviarlo a la api externa
-        const payLoad = {
-            numero_documento: result.rows[0].numfact,
-            numero_control: result.rows[0].num_control
-        };
+//         // 👇 PASO 2. Construir objeto para enviarlo a la api externa
+//         const payLoad = {
+//             numero_documento: result.rows[0].numfact,
+//             numero_control: result.rows[0].num_control
+//         };
 
-        // 👇 PASO 3. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
-        // Nota como no le pasamos headers, ni baseURL, ni Authorization.
-        // El interceptor hace todo eso antes de salir de tu backend.
-        const response = await apiExternaClient.post('/api/Invoice/cancel_invoice', payLoad);
+//         // 👇 PASO 3. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+//         // Nota como no le pasamos headers, ni baseURL, ni Authorization.
+//         // El interceptor hace todo eso antes de salir de tu backend.
+//         const response = await apiExternaClient.post('/api/Invoice/cancel_invoice', payLoad);
 
-        return;
+//         return;
         
-    } catch (error: any) {
-        if (error instanceof AppError) {
-            throw error; // ✅ ya tiene statusCode y location
-        }
+//     } catch (error: any) {
+//         if (error instanceof AppError) {
+//             throw error; // ✅ ya tiene statusCode y location
+//         }
 
-        if (error?.response?.data) {
-            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postAnularService");    
-        }
+//         if (error?.response?.data) {
+//             throw new AppError(error.response.data.message.trim(), error.response.status, "service:postAnularService");    
+//         }
 
-        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postAnularService");
-    } 
-    finally {
-        // Libera el documento del proceso
-        func.liberarDocumento(documento);
-    }
-}
+//         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postAnularService");
+//     } 
+//     finally {
+//         // Libera el documento del proceso
+//         func.liberarDocumento(documento);
+//     }
+// }
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 async function validarPayloadFactura(encFactura: IFacturaDetalle, detFactura: any[]): Promise<void> {
     // 1. Valida que el numero de factura no sea vacio o nulo
     if (encFactura.numfact.trim().length <= 0) {
@@ -215,26 +216,28 @@ async function validarPayloadFactura(encFactura: IFacturaDetalle, detFactura: an
 
     // 7. Validar Tasa del Día (Formato: 3 enteros y 4 decimales con punto. Ej: "342.8633" o "056.6500")
     // Obtener fecha de hoy en formato YYYY-MM-DD (Zona horaria Venezuela / Local)
-    const hoyStr = new Date().toLocaleDateString('sv-SE');
+    // const hoyStr = new Date().toLocaleDateString('sv-SE');
+    const hoyStr = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Caracas' });
 
     // Extraer valores de la consulta SQL
-    let tasaRaw: number | null = encFactura.tasa_del_dia;
-    let fechaRaw: string | null = encFactura.fecha_tasa;
+    let tasaRaw = encFactura.tasa_del_dia ? encFactura.tasa_del_dia.trim() : "";
+    let fechaRaw = encFactura.fecha_tasa ? encFactura.fecha_tasa.trim() : "";
 
-    if (!tasaRaw || tasaRaw === null || tasaRaw === undefined || tasaRaw <= 0 || !fechaRaw || fechaRaw.trim().length <= 0 || fechaRaw.trim() !== hoyStr) {
-        throw new AppError("La tasa oficial del dia está desactualizada o no esta configurada.", 400, "service:validarPayloadFactura");
-    }  
-
-    // Tasa: Formato número decimal con punto a 4 decimales (Ej: 342.8633) SIN ceros a la izquierda
-    const tasaRegex = /^\d{1,3}\.\d{4}$/;
-    
-    if (!tasaRegex.test(tasaRaw.toString())) {
-        throw new AppError(`La tasa del día ('${tasaRaw}') debe tener un formato fiscal estricto de 3 enteros y 4 decimales separados por un punto.`, 400, "service:validarPayloadFactura");
+    // Validar presencia y valor numérico válido
+    if (!tasaRaw || tasaRaw.trim().length <= 0 || parseFloat(tasaRaw) <= 0 || !fechaRaw || fechaRaw.trim().length <= 0 || fechaRaw !== hoyStr) {
+        throw new AppError("La tasa oficial del día está desactualizada.", 400, "service:validarPayloadFactura");
     }
 
-    // 8. Validar la Fceha de la Tasa del Día en formato ("DD-MM-YYYY" o "YYYY-MM-DD")
+    // Validar formato estricto: Exactamente 3 enteros y 4 decimales con punto (Ej: "342.8633" o "056.6500")
+    const tasaRegex = /^\d{3}\.\d{4}$/;
+
+    if (!tasaRegex.test(tasaRaw)) {
+        throw new AppError(`La tasa del día ('${tasaRaw}') debe tener un formato fiscal estricto de 3 enteros y 4 decimales (Ej: '056.6500').`, 400, "service:validarPayloadFactura");
+    }
+
+    // 8. Validar la Fecha de la Tasa del Día en formato ("DD-MM-YYYY" o "YYYY-MM-DD")
     const fechaRegex = /^(\d{2}-\d{2}-\d{4}|\d{4}-\d{2}-\d{2})$/;
-    
+        
     if (!fechaRegex.test(fechaRaw)) {
         throw new AppError(`La fecha de la tasa ('${fechaRaw}') no tiene un formato válido (DD-MM-YYYY o YYYY-MM-DD).`, 400, "service:validarPayloadFactura");
     }

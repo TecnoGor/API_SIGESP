@@ -155,7 +155,7 @@ $function$
 -- DROP FUNCTION public.fn_api_get_factura_detalle(int4);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_factura_detalle(prm_id_fact integer)
- RETURNS TABLE(numfact character varying, coddetalle character varying, "nombreProducto" character varying, "descripcionProducto" character varying, "tipoImpuesto" character varying, "cantidadAdquirida" numeric, "precioProducto" character varying, numpririf character varying, nombre_cliente character varying, emailcliente character varying, dircliente character varying, telcliente character varying, tasa_del_dia double precision, fecha_tasa character varying, num_control character varying)
+ RETURNS TABLE(numfact character varying, coddetalle character varying, "nombreProducto" character varying, "descripcionProducto" character varying, "tipoImpuesto" character varying, "cantidadAdquirida" numeric, "precioProducto" character varying, numpririf character varying, nombre_cliente character varying, emailcliente character varying, dircliente character varying, telcliente character varying, tasa_del_dia character varying, fecha_tasa character varying, num_control character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -163,70 +163,73 @@ AS $function$
 	
 		SELECT
 			-- 1. Formateo de número de factura a 7 ceros (ej. '0000011')
-        	LPAD(f.numfact::text, 7, '0')::varchar AS numfact,
+			LPAD(f.numfact::text, 7, '0')::varchar AS numfact,
 			
 			-- 2. Código recortado a 13 caracteres máximo (Regla API)
-        	SUBSTRING(TRIM(d.coddetalle), 1, 13)::varchar AS coddetalle,
+			SUBSTRING(TRIM(d.coddetalle), 1, 13)::varchar AS coddetalle,
 			
 			-- 3. Nombre del producto en Mayúsculas y recortado a 70 caracteres
-	        SUBSTRING(
-	            UPPER(COALESCE(
-	                NULLIF(
-	                    CASE 
-	                        WHEN d.id_tipodetalle = 'SERVI' THEN s.denser 
-	                        WHEN d.id_tipodetalle = 'ARTIC' THEN a.denart 
-	                        WHEN d.id_tipodetalle = 'CONCE' THEN c.denconfac 
-	                        ELSE '' 
-	                    END, ''
-	                ), 'PRODUCTO SIN NOMBRE'
-	            )), 1, 70
-	        )::varchar AS "nombreProducto",
-
+		    SUBSTRING(
+		        UPPER(COALESCE(
+		            NULLIF(
+		                CASE 
+		                    WHEN d.id_tipodetalle = 'SERVI' THEN s.denser 
+		                    WHEN d.id_tipodetalle = 'ARTIC' THEN a.denart 
+		                    WHEN d.id_tipodetalle = 'CONCE' THEN c.denconfac 
+		                    ELSE '' 
+		                END, ''
+		            ), 'PRODUCTO SIN NOMBRE'
+		        )), 1, 70
+		    )::varchar AS "nombreProducto",
+		
 			-- 4. Descripción del producto recortada a 70 caracteres
-	        SUBSTRING(
-	            UPPER(CONCAT_WS(
-	                ' - ',
-	                COALESCE(
-	                    NULLIF(
-	                        CASE 
-	                            WHEN d.id_tipodetalle = 'SERVI' THEN s.denser 
-	                            WHEN d.id_tipodetalle = 'ARTIC' THEN a.denart 
-	                            WHEN d.id_tipodetalle = 'CONCE' THEN c.denconfac 
-	                            ELSE '' 
-	                        END, ''
-	                    ), 'PRODUCTO SIN NOMBRE'
-	                ),
-	                NULLIF(d.comentario, '')
-	            )), 1, 70
-	        )::varchar AS "descripcionProducto",
-
+		    SUBSTRING(
+		        UPPER(CONCAT_WS(
+		            ' - ',
+		            COALESCE(
+		                NULLIF(
+		                    CASE 
+		                        WHEN d.id_tipodetalle = 'SERVI' THEN s.denser 
+		                        WHEN d.id_tipodetalle = 'ARTIC' THEN a.denart 
+		                        WHEN d.id_tipodetalle = 'CONCE' THEN c.denconfac 
+		                        ELSE '' 
+		                    END, ''
+		                ), 'PRODUCTO SIN NOMBRE'
+		            ),
+		            NULLIF(d.comentario, '')
+		        )), 1, 70
+		    )::varchar AS "descripcionProducto",
+		
 			-- 5. Mapeo de alícuotas del IVA
-	        (CASE 
-	            WHEN d.porciva IS NULL OR d.porciva::INT = 0 THEN 'E'
-	            WHEN d.porciva::INT = 16 THEN 'G'
-	            WHEN d.porciva::INT = 8  THEN 'R'
-	            WHEN d.porciva::INT = 31 THEN 'A'
-	            ELSE 'E'
-	        END)::varchar AS "tipoImpuesto",
+		    (CASE 
+		        WHEN d.porciva IS NULL OR d.porciva::INT = 0 THEN 'E'
+		        WHEN d.porciva::INT = 16 THEN 'G'
+		        WHEN d.porciva::INT = 8  THEN 'R'
+		        WHEN d.porciva::INT = 31 THEN 'A'
+		        ELSE 'E'
+		    END)::varchar AS "tipoImpuesto",
 		
 			-- 6. Cantidad adquirida con 2 decimales
-        	COALESCE(d.cantidad_detalle, 1.00)::numeric(12,2) AS "cantidadAdquirida",
-
+			COALESCE(d.cantidad_detalle, 1.00)::numeric(12,2) AS "cantidadAdquirida",
+		
 			-- 7. Precio con COMA como separador decimal (Ej: "1,55")
-        	REPLACE(TO_CHAR(COALESCE(d.precio_detalle, 0.00), 'FM999999990.00'), '.', ',')::varchar AS "precioProducto",
+			REPLACE(TO_CHAR(COALESCE(d.precio_detalle, 0.00), 'FM999999990.00'), '.', ',')::varchar AS "precioProducto",
 			-- REPLACE(TO_CHAR(COALESCE(d.neto_detalle, 0.00), 'FM999999990.00'), '.', ',')::varchar AS "precioProducto",
 			
 			-- 8. Documento RIF sin espacios
-        	UPPER(TRIM(COALESCE(NULLIF(cl.tipperrif, ''), 'V') || TRIM(COALESCE(NULLIF(cl.numpririf, ''), '00000000')) || COALESCE(NULLIF(cl.numterrif, ''), '')))::varchar AS numpririf,
+			UPPER(TRIM(COALESCE(NULLIF(cl.tipperrif, ''), 'V') || TRIM(COALESCE(NULLIF(cl.numpririf, ''), '00000000')) || COALESCE(NULLIF(cl.numterrif, ''), '')))::varchar AS numpririf,
 			
 			-- 9. Datos del cliente sanitizados
-	        UPPER(TRIM(COALESCE(NULLIF(cl.nombre_cliente, ''), 'CLIENTE NO ESPECIFICADO')))::varchar AS nombre_cliente,			
-	        UPPER(TRIM(COALESCE(cl.emailcliente, '')))::varchar AS emailcliente,
-	        UPPER(TRIM(COALESCE(NULLIF(cl.dircliente, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dircliente,
+		    UPPER(TRIM(COALESCE(NULLIF(cl.nombre_cliente, ''), 'CLIENTE NO ESPECIFICADO')))::varchar AS nombre_cliente,			
+		    UPPER(TRIM(COALESCE(cl.emailcliente, '')))::varchar AS emailcliente,
+		    UPPER(TRIM(COALESCE(NULLIF(cl.dircliente, ''), 'DIRECCIÓN NO ESPECIFICADA')))::varchar AS dircliente,
 			SUBSTRING(regexp_replace(TRIM(COALESCE(cl.telcliente, '00000000000')), '[^a-zA-Z0-9]', '', 'g'), 1, 11) ::varchar AS telcliente,
-			p.tasa_del_dia:: float AS tasa_del_dia,
- 			TO_CHAR(p.fecha_tasa, 'YYYY-MM-DD')::varchar AS fecha_tasa,
-
+			
+			-- 10. Datos de la tasa de las divisas
+			TO_CHAR(p.valor::numeric, 'FM000.0000')::varchar AS tasa_del_dia,
+			-- p.valor:: float AS tasa_del_dia,	
+			TO_CHAR(p.fecha_cambio, 'YYYY-MM-DD')::varchar AS fecha_tasa,
+		
 			-- 10. Numero de Control sin espacios
 			TRIM(idc.num_control)::varchar AS num_control
 		FROM 
@@ -236,11 +239,11 @@ AS $function$
 			LEFT JOIN siv_articulo a ON a.codart=d.coddetalle AND f.codemp = a.codemp AND d.id_tipodetalle = 'ARTIC' 
 			LEFT JOIN soc_servicios s ON s.codser=d.coddetalle AND d.id_tipodetalle = 'SERVI' 
 			LEFT JOIN cxc_conceptofac c ON c.codconfac=d.coddetalle AND d.id_tipodetalle = 'CONCE'
-			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA',
-			public.api_integracion_parametros p
+			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA'
+			LEFT JOIN public.parametro p ON p.parametro_id = 1 AND p.fecha_cambio::date = CURRENT_DATE
 		WHERE  
-			d.codproceso='FACTURA' 
-		AND d.id_fact=prm_id_fact
+			f.codproceso='FACTURA' 
+		AND f.id_fact=prm_id_fact		
 		ORDER BY 
 			d.coddetalle;
 	END;
@@ -271,41 +274,50 @@ $function$
 -- DROP FUNCTION public.fn_api_get_nota_credito_detalle(int4);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_nota_credito_detalle(prm_id_doc integer)
- RETURNS TABLE(numfact character varying, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, coddetalle character varying, cantidad_detdoc numeric, "descripcionProducto" character varying, num_control character varying)
+ RETURNS TABLE(numfact character varying, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, motivo character varying, coddetalle character varying, cantidad_detdoc numeric, descripcion character varying, num_control character varying)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 	    RETURN QUERY
 
 		SELECT
-			-- 1. Formateo de número de factura a 7 ceros (ej. '0000011')
-    		LPAD(f.numfact::text, 7, '0')::varchar AS numfact,
-
+			-- 1. Número de Factura (Solo dígitos, formateado y recortado a 19 chars)
+			SUBSTRING(regexp_replace(LPAD(f.numfact::text, 7, '0'), '\D', '', 'g'), 1, 19)::varchar AS numfact,
+			
 			doc.id_doc,
-
+		
 			-- 2. Código recortado a 19 caracteres máximo (Regla API)
-			SUBSTRING(TRIM(doc.coddoc), 1, 19)::varchar AS coddoc,
-
+			SUBSTRING(regexp_replace(TRIM(doc.coddoc), '\D', '', 'g'), 1, 19)::varchar AS coddoc,
+		
 		    doc.numdoc,
 		    doc.id_fact,
+		    
+		    -- 3. Motivo de la Nota d Credito (Recortar a 50)
+			SUBSTRING(UPPER(COALESCE(TRIM(NULLIF(doc.descripdoc, '')), null)), 1, 50)::varchar AS motivo,    
+		    
 		    dtn.coddetalle,
 		    dtn.cantidad_detdoc,
-
-			UPPER(CONCAT_WS(
-			    ' - ',
-			    	COALESCE(
+		
+		    -- 4. Descripción (Asegurar valor por defecto si viene vacío y recortar a 50)
+			SUBSTRING(
+			    UPPER(COALESCE(
 			        NULLIF(
-			            CASE 
-			                WHEN dtn.id_tipodetalle = 'SERVI' THEN s.denser 
-							WHEN dtn.id_tipodetalle = 'ARTIC' THEN a.denart
-			                ELSE '' 
-			            END, ''
+			            CONCAT_WS(
+			                ' - ',
+			                NULLIF(
+			                    CASE 
+			                        WHEN dtn.id_tipodetalle = 'SERVI' THEN s.denser 
+			                        WHEN dtn.id_tipodetalle = 'ARTIC' THEN a.denart
+			                        ELSE '' 
+			                    END, ''
+			                ),
+			                NULLIF(dtn.comentdoc, '')
+			            ), ''
 			        ), 'Producto sin nombre'
-			    ),
-			    NULLIF(dtn.comentdoc, '')
-			))::varchar AS "descripcionProducto",
-
-			-- 10. Numero de Control sin espacios
+			    )), 1, 50
+			)::varchar AS descripcion,
+			
+			-- 5. Numero de Control sin espacios
 			TRIM(idc.num_control)::varchar AS num_control
 		FROM 
 			cxc_documento doc
@@ -775,7 +787,7 @@ AS $function$
 	BEGIN
 		SELECT EXISTS (
 			SELECT 	1 
-			FROM 	public.api_integracion_documentos_cgi 
+			FROM 	public.api_integracion_documentos_fiscales 
 			WHERE 	id_fact = prm_id_fact
 			AND		codtipdoc = 'FACTURA'
 		) INTO v_enviada;
@@ -895,96 +907,5 @@ BEGIN
     SET		tasa_del_dia = prm_tasa_del_dia,        
         	fecha_tasa = prm_fecha_tasa::date;
 END;
-$function$
-;
-
--- DROP FUNCTION public.fn_respaldo_api_integracion_cxc_factura(int4, int4, float8, float8, float8, float8, varchar, varchar);
-
-CREATE OR REPLACE FUNCTION public.fn_respaldo_api_integracion_cxc_factura(prm_id_cliente integer, prm_idfacturaorigen integer, prm_subtot double precision, prm_baseimp double precision, prm_iva double precision, prm_total double precision, prm_descripfact character varying, prm_fecha_fact character varying)
- RETURNS integer
- LANGUAGE plpgsql
-AS $function$
-	DECLARE 
-		v_id_fact			integer;
-		v_next_numfact  	integer;
-		v_next_numcont		integer;
-		v_codfact 			character varying(25);
-		v_numcont			character varying(25);
-
-	BEGIN
-		-- 1. Obtenemos el número máximo actual de numfact y lo incrementamos en 1
-		SELECT 	COALESCE(MAX(numfact), 0) + 1 
-		INTO 	v_next_numfact
-		FROM 	public.cxc_factura;
-
-		-- 2. Convertimos el número a string para obtener codfact
-        v_codfact := v_next_numfact::text;
-
-		-- 3. Obtenemos el número máximo actual de numcont y lo incrementamos en 1
-		SELECT 	COALESCE(MAX(NULLIF(regexp_replace(split_part(numcont, '-', 2), '\D', '', 'g'), '')::integer),0) + 1 
-		INTO 	v_next_numcont
-		FROM 	public.cxc_factura;	
-
-		-- 4. Reconstruimos el numcont con el formato '00-XXXXXXX' (7 dígitos)
-		-- OJO OJO OJO - HAY QUE ESPECIFICAR CON ROBERT DE DONDE DE VA A SACAR EL NUMERO DE COMPROBANTE PARA LA FACTURA
-		-- SI DEL TALONARIO, POR SUCURSAL O POR AÑO
-		v_numcont := '00-' || LPAD(v_next_numcont::text, 7, '0');
-
-		-- 5. Insertamos el registro y capturamos el ID autoincremental
-		INSERT INTO public.cxc_factura
-			(codemp, codproceso, numfact, codfact, numcont, id_cliente, id_transp, id_estfact, id_condpago, id_vend, 
-			codmon, tascam, tipopecont, codcaj, fecfact, fecvenc, subtot, iva, otros, baseimp, total,
-			descripfact, comentadifact, fecreg, usureg, horareg, codsuc)
-		VALUES
-			('0001', 'FACTURA', v_next_numfact, v_codfact, v_numcont, prm_id_cliente, 9, 1, 12, 1,
-		 	'001', 1, 'DEV', '0001', prm_fecha_fact, prm_fecha_fact, prm_subtot, prm_iva, 0, prm_baseimp, prm_total,
-			prm_descripfact, '', TO_CHAR(NOW(), 'YYYY-MM-DD'), 'ADMINISTRADOR', TO_CHAR(NOW(), 'HH24:MI:SS'), '0001')		
-		RETURNING id_fact INTO v_id_fact;
-	
-		-- 6. Retornamos el id_fact
-    	RETURN v_id_fact;
-	END;
-$function$
-;
-
--- DROP FUNCTION public.fn_respaldo_api_integracion_verifica_factura_enviada(int4);
-
-CREATE OR REPLACE FUNCTION public.fn_respaldo_api_integracion_verifica_factura_enviada(prm_id_fact integer)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
-	DECLARE
-		v_enviada boolean;
-	BEGIN
-		SELECT EXISTS (
-			SELECT 	1 
-			FROM 	public.api_integracion_documentos_cgi 
-			WHERE 	id_fact = prm_id_fact
-			AND		codtipdoc = 'FACTURA'
-		) INTO v_enviada;
-		
-		RETURN v_enviada;
-	END;
-$function$
-;
-
--- DROP FUNCTION public.fn_respaldo_api_integracion_verifica_nc_enviada(int4);
-
-CREATE OR REPLACE FUNCTION public.fn_respaldo_api_integracion_verifica_nc_enviada(prm_id_doc integer)
- RETURNS boolean
- LANGUAGE plpgsql
-AS $function$
-	DECLARE
-		v_enviada boolean;
-	BEGIN
-		SELECT EXISTS (
-			SELECT 	1 
-			FROM 	public.api_integracion_documentos_cgi 
-			WHERE 	id_doc = prm_id_doc
-			AND		codtipdoc = 'NC'
-		) INTO v_enviada;
-		
-		RETURN v_enviada;
-	END;
 $function$
 ;

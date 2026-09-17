@@ -6,7 +6,7 @@ import { verificaToken } from "../middlewares/token.middleware.js";
 
 const router = Router();
 
-router.post("/:id_doc", verificaToken, vali.valPathParamIdDoc, midd.valBodyCodigoUsuario, ctrl.postCrearNCController);                  // ? VERIFICADA - 27-07-2026
-router.post("/parcial/:id_doc", verificaToken, vali.valPathParamIdDoc, midd.valBodyCodigoUsuario, ctrl.postCrearNCParcialController);   // ? VERIFICADA - 27-07-2026
+router.post("/:id_doc", verificaToken, vali.valPathParamIdDoc, midd.valBodyCodigoUsuario, ctrl.postCrearNCController);                  // ? LISTA: 17-09-2026
+router.post("/parcial/:id_doc", verificaToken, vali.valPathParamIdDoc, midd.valBodyCodigoUsuario, ctrl.postCrearNCParcialController);   // ? LISTA: 17-09-2026
 
 export default router;

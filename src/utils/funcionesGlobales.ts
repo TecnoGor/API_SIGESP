@@ -8,7 +8,7 @@ import { AppError } from "../utils/appError.js";
 // Mapa en memoria para documentos en proceso
 const documentosEnProceso = new Set<string>();
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export function ValidaDatos(
     req: Request,
     res: Response,
@@ -24,7 +24,7 @@ export function ValidaDatos(
     }
 }
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function GeneraToken(payLoadToken: IPayLoadToken, location: string,
 ) {
     try {
@@ -49,7 +49,7 @@ export async function GeneraToken(payLoadToken: IPayLoadToken, location: string,
     }
 }
 
-// ? LISTO - 20-06-2025
+// ? LISTA: 17-09-2026
 export async function Encriptar(cadena: string, location: string) {
     try {
         const salt = await bcryptjs.genSaltSync(10);
@@ -64,7 +64,7 @@ export async function Encriptar(cadena: string, location: string) {
     }
 }
 
-// ? LISTO - 20-06-2025
+// ? LISTA: 17-09-2026
 export function VerificaDocumentoEnProceso(key: string, location: string)
 {
     // 1. CONTROL DE IDEMPOTENCIA: Verificar si ya se está procesando
@@ -73,12 +73,12 @@ export function VerificaDocumentoEnProceso(key: string, location: string)
     }
 }
 
-// ? LISTO - 20-06-2025
+// ? LISTA: 17-09-2026
 export function bloquearDocumento(key: string): void {
     documentosEnProceso.add(key);
 }
 
-// ? LISTO - 20-06-2025
+// ? LISTA: 17-09-2026
 export function liberarDocumento(key: string): void {
     documentosEnProceso.delete(key);
 }

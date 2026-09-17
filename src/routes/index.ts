@@ -13,8 +13,8 @@ const routes = Router();
 // USUARIOS
 routes.use("/", routerRaiz);
 routes.use("/auth", routerAuth);
-routes.use("/factura", routerFactura);
-routes.use("/nota-credito", routerNotaCredto);
+routes.use("/factura", routerFactura);              // ? LISTA: 17-09-2026
+routes.use("/nota-credito", routerNotaCredto);      // ? LISTA: 17-09-2026
 routes.use("/retencion", routerRetencion);
 
 // ADMINISTRADOR

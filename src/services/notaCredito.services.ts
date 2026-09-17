@@ -6,7 +6,7 @@ import type { IResponseNotaCredito } from '../types/IResponseNotaCredito.js';
 import type { IResponseNotaCreditoParcial } from '../types/IResponseNotaCreditoParcial.js';
 import * as func from "../utils/funcionesGlobales.js";
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function postCrearNCService(id_doc: number, codigo_usuario: string): Promise<IResponseNotaCredito> {
     // arma el documento que se va a procesar
     const documento = `NC: ${id_doc.toString()}`;
@@ -27,13 +27,14 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
             throw new AppError('Nota de Credito no encontrada', 404, "service:postCrearNCService");
         }
 
-        // 👇 PASO 2. Verifico si el documento (NC) ya fue enviado anteriormente.
-        const numfact = result.rows[0].numfact.trim(); 
-        const id_fact = result.rows[0].id_fact;
-        const numControl = result.rows[0]?.num_control;
-        const ncEnviada = numControl ? numControl.trim() : '';
-        const coddoc = result.rows[0].coddoc.trim();
+        // Datos planos de la nota de credito
+        const datosNC = result.rows[0];
 
+        const id_fact = datosNC.id_fact;
+        const numControl = datosNC?.num_control;
+        const ncEnviada = numControl ? numControl.trim() : '';
+
+        // 👇 PASO 2. Verifico si el documento (NC) ya fue enviado anteriormente.
         if (ncEnviada.length > 0) {
             throw new AppError('Esta Nota de Crédito ya habia sido Enviada Anteriormente.', 401, "service:postCrearNCService");
         }
@@ -49,21 +50,14 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
             throw new AppError('El número de factura asociada a la Nota de Crédito, no existe.', 401, "service:postCrearNCService");
         }
 
-        // 👇 PASO 4. Validacioens
-        // Valida que el numero de factura no sea vacio o nulo
-        if (numfact.trim().length <= 0) {
-            throw new AppError("El número de factura es requerido.", 400, "service:postCrearNCService");
-        }
-
-        // Valida que el numero de factura no sea vacio o nulo
-        if (coddoc.trim().length <= 0) {
-            throw new AppError("El número de Nota de Crédito es requerido.", 400, "service:postCrearNCService");
-        }
+        // 👇 PASO 4. Se validan los campos requeridos y formatos
+        await validarPayloadNC(datosNC);
 
         // 👇 PASO 5. Construir objeto para enviarlo a la api externa
         const payLoad = {
-            numeroFactura: numfact.trim(),      // Número de factura a afectar
-            numeroNotaCredito: coddoc.trim()    // Número de nota de crédito a crear
+            numeroFactura: datosNC.numfact.trim(),      // Número de factura a afectar
+            numeroNotaCredito: datosNC.coddoc.trim(),   // Número de nota de crédito a crear
+            descripcion: datosNC.motivo?.trim(),        // Descripcion del motivo de la nota de crédito a crear
         };
 
         // 👇 PASO 6. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
@@ -83,8 +77,8 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
         }
 
         // 👇 PASO 7. Guarda los datos del documento enviado        
-        const prm_id_fact = result.rows[0].id_fact;
-        const prm_numfact = result.rows[0].numfact;
+        const prm_id_fact = id_fact;
+        const prm_numfact = datosNC.numfact;
         const prm_id_doc = id_doc;
         const prm_codtipdoc = 'NC';
         const prm_num_control = data.control_number;
@@ -101,7 +95,7 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
             // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
             // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
             // o guardar este error en un archivo de texto para no perder el rastro.
-            console.error(`🚨 CRÍTICO: Nota de Credito ${result.rows[0].coddoc} creada en CGI, pero falló guardado local:`, dbError);
+            console.error(`🚨 CRÍTICO: Nota de Credito ${datosNC.coddoc.trim()} creada en CGI, pero falló guardado local:`, dbError);
             
             // ¡MUY IMPORTANTE! NO hacemos 'throw' aquí. 
             // Dejamos que el código continúe para que el cliente reciba su respuesta de éxito.
@@ -126,7 +120,7 @@ export async function postCrearNCService(id_doc: number, codigo_usuario: string)
     }
 }
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function postCrearNCParcialService(id_doc: number, codigo_usuario: string): Promise<IResponseNotaCreditoParcial> {
     // arma el documento que se va a procesar
     const documento = `NC-PARCIAL: ${id_doc.toString()}`;
@@ -147,13 +141,14 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
             throw new AppError('Nota de Credito Parcial no encontrada', 404, "service:postCrearNCParcialService");
         }
 
-        // 👇 PASO 2. Verifico si el documento (NC Parcial) ya fue enviado anteriormente.
-        const numfact = result.rows[0].numfact.trim(); 
-        const id_fact = result.rows[0].id_fact;
-        const numControl = result.rows[0]?.num_control;
-        const ncEnviada = numControl ? numControl.trim() : '';
-        const coddoc = result.rows[0].coddoc.trim();
+        // Datos del Encabezado
+        const encNC = result.rows[0];
 
+        const id_fact = encNC.id_fact;
+        const numControl = encNC?.num_control;
+        const ncEnviada = numControl ? numControl.trim() : '';
+
+        // 👇 PASO 2. Verifico si el documento (NC Parcial) ya fue enviado anteriormente.
         if (ncEnviada.length > 0) {
             throw new AppError('Esta Nota de Crédito Parcial ya habia sido Enviada Anteriormente.', 401, "service:postCrearNCParcialService");
         }
@@ -169,29 +164,27 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
             throw new AppError('El número de factura asociada a la Nota de Crédito Parcial, no existe.', 401, "service:postCrearNCParcialService");
         }
 
-        // Datos del Encabezado
-        const encNC = result.rows[0];
-
         // Datos del detalle
         const detalleNC = result.rows.map(row => {
             return {
                 codigo: row.coddetalle.trim(),
                 cantidad: row.cantidad_detdoc,
-                descripcion: row.descripcionProducto.trim()
+                descripcion: row.descripcion.trim()
             }
-        });       
-        
+        });
+
         // 👇 PASO 4. Se validan los campos requeridos y formatos
-        await validarPayloadNC(encNC, detalleNC);
+        await validarPayloadNCParcial(encNC, detalleNC);
 
         // 👇 PASO 5. Construir objeto para enviarlo a la api externa
         const payLoad = {
-            numeroFactura: numfact.trim(),      // Número de factura a afectar
-            numeroNotaCredito: coddoc.trim(),    // Número de nota de crédito a crear
+            numeroFactura: encNC.numfact.trim(),        // Número de factura a afectar
+            numeroNotaCredito: encNC.coddoc.trim(),     // Número de nota de crédito a crear
+            descripcion: encNC.motivo?.trim(),          // Descripcion del motivo de la nota de crédito a crear
             productos: detalleNC
         };
 
-        // 👇 PASO 5. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // 👇 PASO 6. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
         // Nota como no le pasamos headers, ni baseURL, ni Authorization.
         // El interceptor hace todo eso antes de salir de tu backend.
         const response = await apiExternaClient.post('/api/Invoice/add_credit_note_with_products', payLoad);
@@ -251,37 +244,97 @@ export async function postCrearNCParcialService(id_doc: number, codigo_usuario: 
     }
 }
 
-// ? VERIFICADA - 27-07-2026
-async function validarPayloadNC(encNC: INotaCreditoDetalle, detNC: any[]): Promise<void> {
-    // 1. Valida que el numero de factura no sea vacio o nulo
-    if (encNC.numfact.trim().length <= 0) {
+// ? LISTA: 17-09-2026
+async function validarPayloadNC(datosNC: INotaCreditoDetalle): Promise<void> {
+    const numfact = datosNC.numfact ? datosNC.numfact.trim() : "";
+    const coddoc = datosNC.coddoc ? datosNC.coddoc.trim() : "";
+    const motivo = datosNC.motivo ? datosNC.motivo.trim() : "";
+
+    // Expresión regular: Solo dígitos (mínimo 1, máximo 19 caracteres)
+    const regexSoloNumeros = /^\d{1,19}$/;
+
+    // Valida que el numero de factura no sea vacio o nulo
+    if (!numfact || numfact.trim().length <= 0) {
         throw new AppError("El número de factura es requerido.", 400, "service:validarPayloadNC");
     }
 
-    // 2. Valida que el numero de factura no sea vacio o nulo
-    if (encNC.coddoc.trim().length <= 0) {
+    // Valida que el numero de factura sea Solo dígitos + Max 19
+    if (!regexSoloNumeros.test(numfact)) {
+        throw new AppError(`El número de factura ('${numfact}') debe contener solo dígitos (máximo 19 caracteres).`, 400, "service:validarPayloadNC");
+    }
+    
+    // Valida que el numero de factura no sea vacio o nulo
+    if (!coddoc || coddoc.trim().length <= 0) {
         throw new AppError("El número de Nota de Crédito es requerido.", 400, "service:validarPayloadNC");
     }
 
-    // 3. Validar Detalle
+    if (!regexSoloNumeros.test(coddoc)) {
+        throw new AppError(`El número de Nota de Crédito ('${coddoc}') debe contener solo dígitos (máximo 19 caracteres).`, 400, "service:validarPayloadNC");
+    }
+
+    // Valida que la descripcion de la Nota de Credito no sea vacio o nulo
+    if (!motivo || motivo.trim().length <= 0) {
+        throw new AppError("La descripción del motivo de la Nota de Crédito es requerida.", 400, "service:validarPayloadNC");
+    }
+
+    if (motivo.length > 50) {
+        throw new AppError(`La descripción del motivo de la Nota de Crédito excede el límite permitido de 50 caracteres (actual: ${motivo.length}).`, 400, "service:validarPayloadNC");
+    }
+}
+
+// ? LISTA: 17-09-2026
+async function validarPayloadNCParcial(encNC: INotaCreditoDetalle, detNC: any[]): Promise<void> {
+    // Expresión regular: Solo dígitos (mínimo 1, máximo 19 caracteres)
+    const regexSoloNumeros = /^\d{1,19}$/;
+
+    // 1. Valida que el numero de factura no sea vacio o nulo
+    if (!encNC.numfact || encNC.numfact.trim().length <= 0) {
+        throw new AppError("El número de factura es requerido.", 400, "service:validarPayloadNCParcial");
+    }
+
+    // Valida que el numero de factura sea Solo dígitos + Max 19
+    if (!regexSoloNumeros.test(encNC.numfact)) {
+        throw new AppError(`El número de factura ('${encNC.numfact}') debe contener solo dígitos (máximo 19 caracteres).`, 400, "service:validarPayloadNCParcial");
+    }
+
+    // 2. Valida que el numero de factura no sea vacio o nulo
+    if (!encNC.coddoc || encNC.coddoc.trim().length <= 0) {
+        throw new AppError("El número de Nota de Crédito es requerido.", 400, "service:validarPayloadNCParcial");
+    }
+
+    // Valida que el numero de factura sea Solo dígitos + Max 19
+    if (!regexSoloNumeros.test(encNC.coddoc)) {
+        throw new AppError(`El número de Nota de Crédito ('${encNC.coddoc}') debe contener solo dígitos (máximo 19 caracteres).`, 400, "service:validarPayloadNCParcial");
+    }
+
+    // 3. Valida que la descripcion de la Nota de Credito no sea vacio o nulo
+    if (!encNC.motivo || encNC.motivo.trim().length <= 0) {
+        throw new AppError("La descripción del motivo de la Nota de Crédito es requerida.", 400, "service:validarPayloadNCParcial");
+    }
+
+    if (encNC.motivo.length > 50) {
+        throw new AppError(`La descripción del motivo de la Nota de Crédito excede el límite permitido de 50 caracteres (actual: ${encNC.motivo.length}).`, 400, "service:validarPayloadNCParcial");
+    }
+
+    // 4. Validar Detalle
     if (!detNC || detNC.length === 0) {
-        throw new AppError('Productos debe tener al menos un item asociado.', 400, "service:validarPayloadNC");
+        throw new AppError('Productos debe tener al menos un item asociado.', 400, "service:validarPayloadNCParcial");
     }
 
     for (const prod of detNC) {
-        // 4. Valida que el codigo del producto no sea vacio o nulo
+        // 5. Valida que el codigo del producto no sea vacio o nulo
         if (prod.codigo.trim().length <= 0) {
-            throw new AppError("El código del producto es requerido.", 400, "service:validarPayloadNC");
+            throw new AppError("El código del producto es requerido.", 400, "service:validarPayloadNCParcial");
         }
 
-        // 5. Valida la cantidad adquirida
+        // 6. Valida la cantidad adquirida
         if (prod.cantidad <= 0) {
-            throw new AppError(`La cantidad del producto '${prod.codigo}' (${prod.cantidad}) debe ser mayor a 0.`, 400, "service:validarPayloadNC");
+            throw new AppError(`La cantidad del producto '${prod.codigo}' (${prod.cantidad}) debe ser mayor a 0.`, 400, "service:validarPayloadNCParcial");
         }
 
-        // 6. Valida que el nombre del producto no sea vacio o nulo
+        // 7. Valida que el nombre del producto no sea vacio o nulo
         if (prod.descripcion.trim().length <= 0) {
-            throw new AppError("La descripción del producto es requerido.", 400, "service:validarPayloadNC");
+            throw new AppError("La descripción del producto es requerido.", 400, "service:validarPayloadNCParcial");
         }
     }
 }
