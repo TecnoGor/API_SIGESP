@@ -30,6 +30,23 @@ CREATE TABLE public.api_configuracion_cgi (
 );
 
 
+-- public.api_integracion_codigos_ret_islr definition
+
+-- Drop table
+
+-- DROP TABLE public.api_integracion_codigos_ret_islr;
+
+CREATE TABLE public.api_integracion_codigos_ret_islr (
+	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
+	codigo varchar(20) NOT NULL,
+	concepto_de_retencion varchar(254) NOT NULL,
+	cmp_codret varchar(10) NULL,
+	CONSTRAINT pk_api_integracion_codigos_ret_islr PRIMARY KEY (id),
+	CONSTRAINT unq_api_codigos_ret_cmp_codret UNIQUE (cmp_codret),
+	CONSTRAINT unq_api_codigos_ret_codigo UNIQUE (codigo)
+);
+
+
 -- public.api_integracion_documentos_fiscales definition
 
 -- Drop table
@@ -87,7 +104,8 @@ CREATE TABLE public.api_integracion_parametros (
 	cuenta_x_cobrar varchar(25) NOT NULL,
 	cuenta_ingreso varchar(25) NOT NULL,
 	cuenta_x_pagar_iva varchar(25) NOT NULL,
-	cuenta_partida_ingreso varchar(25) NOT NULL
+	cuenta_partida_ingreso varchar(25) NOT NULL,
+	cantidad_doc_ret int4 DEFAULT 0 NOT NULL
 );
 
 

@@ -15,11 +15,11 @@ routes.use("/", routerRaiz);
 routes.use("/auth", routerAuth);
 routes.use("/factura", routerFactura);              // ? LISTA: 17-09-2026
 routes.use("/nota-credito", routerNotaCredto);      // ? LISTA: 17-09-2026
-routes.use("/retencion", routerRetencion);
+routes.use("/retencion", routerRetencion);          // ? LISTA: 17-09-2026
 
 // ADMINISTRADOR
 routes.use("/configuracion", routerConfig);
-routes.use("/contingencia", routerContingencia);
+routes.use("/contingencia", routerContingencia);    // ? LISTA: 17-09-2026
 
 // INTEGRACION
 routes.use("/integracion", routerIntegracion);

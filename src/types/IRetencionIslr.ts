@@ -20,4 +20,5 @@ export interface IRetencionIslr {
     telefono: string;  
     id_codigo_ret: string;
     num_control: string;
+    cantidad_doc_ret:number;
 }

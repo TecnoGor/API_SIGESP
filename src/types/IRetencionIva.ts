@@ -20,4 +20,5 @@ export interface IRetencionIva {
     dirsujret: string;  
     telefono: string;      
     num_control: string;
+    cantidad_doc_ret: number;
 }

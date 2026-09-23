@@ -5,7 +5,8 @@ import { verificaToken } from "../middlewares/token.middleware.js";
 
 const router = Router();
 
-router.post("/tasa-dolar", verificaToken, ctrl.postTasaDolaroficialController);                                     // ? VERIFICADA - 27-07-2026
-router.post("/carga-documentos-enviados", midd.valBodyCodigoUsuario, ctrl.postCargarDocumentosEnviadosController);  // ? VERIFICADA - 27-07-2026
+router.post("/carga-documentos-enviados", midd.valBodyCodigoUsuario, ctrl.postCargarDocumentosEnviadosController);          // ? LISTA: 17-09-2026
+router.post("/carga-codigos-retencion-islr", midd.valBodyCodigoUsuario, ctrl.postCargarCodigosRetencionIslrController);     // ? LISTA: 17-09-2026
+// router.post("/tasa-dolar", verificaToken, ctrl.postTasaDolaroficialController);                                          // ! NO APLICA: 17-09-2026
 
 export default router;

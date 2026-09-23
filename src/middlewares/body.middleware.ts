@@ -2,7 +2,7 @@ import { body, checkExact } from "express-validator";
 import * as func from "../utils/funcionesGlobales.js";
 import type { NextFunction, Request, Response } from "express";
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export const valBodyCodigoUsuario = [
     body("codigo_usuario")
         .trim()
