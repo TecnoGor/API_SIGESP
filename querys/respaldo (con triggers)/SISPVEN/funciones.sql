@@ -1,3 +1,63 @@
+-- DROP FUNCTION public.fn_actualiza_tasa(float8, timestamp, float8, timestamp);
+
+CREATE OR REPLACE FUNCTION public.fn_actualiza_tasa(prm_tasa_dolar double precision, prm_fecha_cambio_dolar timestamp without time zone, prm_tasa_euro double precision, prm_fecha_cambio_euro timestamp without time zone)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE 
+		v_ahora timestamp(0) := date_trunc('second', current_timestamp);
+	BEGIN
+
+		WITH datos_nuevos (nombre, valor_nuevo, fecha_cambio) AS (
+	        VALUES 
+	            ('BCV DOLAR'::varchar, TRUNC(prm_tasa_dolar::numeric, 2)::float8, prm_fecha_cambio_dolar),
+	            ('IposPlus'::varchar, TRUNC(prm_tasa_dolar::numeric, 2)::float8, prm_fecha_cambio_dolar),
+	            ('BCV EURO'::varchar, TRUNC(prm_tasa_euro::numeric, 2)::float8, prm_fecha_cambio_euro)
+	    ),
+	    -- 1. Capturamos valor previo, valor nuevo y su fecha de cambio correspondiente
+	    parametros_previos AS (
+	        SELECT	p.parametro_id,
+	            	p.valor AS valor_anterior,
+	            	dn.valor_nuevo,
+					dn.fecha_cambio
+	        FROM 	public.parametro p
+	        JOIN 	datos_nuevos dn ON TRIM(p.nombre) = TRIM(dn.nombre)
+	        WHERE 	p.activo = true
+	        FOR UPDATE OF p
+	    ),
+	    -- 2. Actualizamos la tabla principal
+	    actualizacion AS (
+	        UPDATE 	public.parametro p
+	        SET 	valor = pp.valor_nuevo,
+	            	updated_at = v_ahora
+	        FROM 	parametros_previos pp
+	        WHERE 	p.parametro_id = pp.parametro_id
+	    )
+
+	    -- 3. Insertamos SIEMPRE en el histórico (así el valor no cambie)
+	    INSERT INTO public.parametros_historicos (
+	        parametro_id,
+	        valor_anterior,
+	        valor_nuevo,
+	        usuario_id,
+	        fecha_cambio,
+	        created_at,
+	        updated_at
+	    )
+	    SELECT 
+	        pp.parametro_id,
+	        pp.valor_anterior,
+	        pp.valor_nuevo,
+	        1,
+	        pp.fecha_cambio,
+	        v_ahora,
+	        v_ahora
+	    FROM 
+			parametros_previos pp;
+	END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_integracion_get_facturas_por_enviar();
 
 CREATE OR REPLACE FUNCTION public.fn_api_integracion_get_facturas_por_enviar()

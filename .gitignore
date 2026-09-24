@@ -3,7 +3,7 @@ node_modules/
 
 # Variables de entorno SECRETAS (nunca subir esto)
 .env
-.env.local
+.env.development
 .env.production
 
 # Carpeta compilada (Render la genera solo)

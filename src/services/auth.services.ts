@@ -1,41 +1,27 @@
 import { AppError } from "../utils/appError.js";
-import { poolSigesp } from "../database/db.js";
 import * as func from "../utils/funcionesGlobales.js";
 import type { IPayLoadToken } from "../types/IPayLoadToken.js";
 import type { IRequestToken } from "../types/IRequestToken.js";
-import type { IConfiguracionCgi } from "../types/IConfiguracionCgi.js";
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function postTokenService(data: IRequestToken): Promise<string> {
-    // Busco los datos de la configuracion CGI
-    const query = 'SELECT * FROM fn_api_get_configuracion_cgi()';
-    const result = await poolSigesp.query<IConfiguracionCgi>(query);    
+    const validClientId = process.env.APP_API_CONFIG_ID_CLIENTE?.trim();
+    const validClientKey = process.env.APP_API_CONFIG_KEY?.trim();
 
-    // verifico si la aplicacion esta registrada
-    if (result.rows.length <= 0 ) {
-        throw new AppError('Acceso Denegado. Aplicacion No Registrada', 401, "service:postTokenService");
-    }
-    
-     // verifico el estatus de la aplicacion cliente
-    if (!result.rows[0].activo) {
-        throw new AppError('Acceso Denegado. Aplicacion Inactiva', 401, "service:postTokenService");
+    // Medida de seguridad en caso de olvidar configurar el .env
+    if (!validClientId || !validClientKey) {
+        throw new AppError('Acceso Denegado. Error de configuración del servidor', 500, "service:postTokenService");
     }
 
-    // Verifica si es el mismo id_cliente
-    if (result.rows[0].id_cliente != data.id_cliente) {
-        throw new AppError('Acceso Denegado. Credenciales Incorrectas', 401, "service:postTokenService");        
-    }
-
-    // Verifica si es la misma key
-    if (result.rows[0].key != data.key) {
+    // Compara directamente las credenciales enviadas por la App A
+    if (data.id_cliente.trim() !== validClientId || data.key.trim() !== validClientKey) {
         throw new AppError('Acceso Denegado. Credenciales Incorrectas', 401, "service:postTokenService");        
     }
 
     // Construye el cuerpo del payLoad
     const payLoadToken: IPayLoadToken = {
-        id_cliente: await func.Encriptar(result.rows[0].id_cliente,"service:posRegisterService"),
-        aplicacion: result.rows[0].aplicacion,
-        //activo: await func.Encriptar(result.rows[0].activo.toString(),"service:posRegisterService")
+        id_cliente: await func.Encriptar(validClientId,"service:postTokenService"),
+        aplicacion: process.env.APP_API_CONFIG_APLICACION?.trim()!
     };
 
     // Genero el AccessToken

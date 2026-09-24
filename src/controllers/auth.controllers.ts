@@ -1,7 +1,7 @@
 import type { NextFunction, Request, Response } from "express";
 import * as serv from "../services/auth.services.js";
 
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export async function postTokenController(
     req: Request,
     res: Response,
