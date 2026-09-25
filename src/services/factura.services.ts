@@ -3,7 +3,6 @@ import { AppError } from "../utils/appError.js";
 import apiExternaClient from '../utils/apiExternaClient.js';
 import type { IFacturaDetalle } from '../types/IFacturaDetalle.js';
 import type { IResponseFactura } from '../types/IResponseFactura.js';
-import type { IFacturaAnular } from '../types/IFacturaAnular.js';
 import * as func from "../utils/funcionesGlobales.js";
 
 // ? LISTA: 17-09-2026
@@ -27,14 +26,23 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
             throw new AppError('Factura no encontrada', 404, "service:postAgregarService");
         }
 
-        // 👇 PASO 2. Verifico si el documento (FACTURA) ya fue enviado anteriormente.
-        const numControl = result.rows[0]?.num_control;
-        const facturaEnviada = numControl ? numControl.trim() : '';
-
-        if (facturaEnviada.length > 0) {
-            throw new AppError('Esta Factura ya habia sido Enviada Anteriormente.', 401, "service:postAgregarService");
-        }
+        // 👇 PASO 2. Verifico si el estado del documento (FACTURA).
+        const estado = result.rows[0].estado?.trim();
+        const observacion = result.rows[0].observacion?.trim();
+        const numControl = result.rows[0]?.num_control?.trim();        
         
+        if (estado?.toUpperCase() === "PENDIENTE") {
+            throw new AppError("Esta factura tiene un proceso pendiente.", 409,"service:postAgregarService");
+        }
+
+        if (estado?.toUpperCase() === "ENVIADO" && numControl) {
+            throw new AppError("Esta factura ya fue enviada correctamente.", 409, "service:postAgregarService");
+        }
+
+        if (estado?.toUpperCase() === "RECHAZADO") {
+            throw new AppError(`Esta factura fue rechazada por el siguiente motivo: ${observacion}`, 409, "service:postAgregarService");
+        }
+
         // Datos del Encabezado
         const encFactura = result.rows[0];
 
@@ -74,44 +82,80 @@ export async function postAgregarService(id_fact: number, codigo_usuario: string
             ]
         };
 
-        // 👇 PASO 5. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // 👇 PASO 5. Realiza el registro inicial de la factura        
+        const prm_id_fact = id_fact;
+        const prm_numfact = Number(encFactura.numfact);
+        const prm_id_doc = null;
+        const prm_codtipdoc = 'FACTURA';        
+        const prm_codusu = codigo_usuario;
+
+        // registro inicial
+        const queryIni = 'SELECT fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5) AS filas_afectadas';
+        const resIni = await poolSigesp.query(queryIni, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_codusu]);
+
+        // Convertimos el resultado a número entero
+        const filasAfectadas = parseInt(resIni.rows[0].filas_afectadas, 10);
+
+        if (filasAfectadas <= 0) {
+            console.error(`🚨 CRÍTICO: Factura ${prm_numfact} no pudo ser registrada localmente`);
+
+            throw new AppError(`Factura ${prm_numfact} no pudo ser registrada localmente`, 500, "service:postAgregarService");        
+        }
+
+        // 👇 PASO 6. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
         // Nota como no le pasamos headers, ni baseURL, ni Authorization.
         // El interceptor hace todo eso antes de salir de tu backend.
         const response = await apiExternaClient.post('/api/Invoice/add_list_invoice', payLoad);
 
         if (response.data.invoice_errors && response.data.invoice_errors.length > 0) {
-            throw new AppError(`${response.data.message.trim()} ${response.data.invoice_errors[0]}`, 409, "service:postAgregarService");
+            const prm_observacion = response.data.message.trim();
+        
+            try {
+                // actualiza respuesta de rechazo
+                const queryError = 'SELECT fn_api_put_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) AS filas_actualizadas';
+                const resError = await poolSigesp.query(queryError, [prm_id_fact,  prm_numfact, prm_id_doc, prm_codtipdoc, 'RECHAZADO', null, null, prm_observacion, null, null]);
+            
+                // Convertimos el resultado a número entero
+                const filas_actualizadas = parseInt(resError.rows[0].filas_actualizadas, 10);
+
+                if (filas_actualizadas <= 0) {
+                    throw new Error (`🚨 CRÍTICO: Factura ${prm_numfact} no pudo ser actualizada localmente`)
+                }
+            } catch (dbError) {
+                console.error(dbError);
+            }
+
+            throw new AppError(`${response.data.message.trim()} ${response.data.invoice_errors[0]}`, 409, "service:postAgregarService");        
         }
 
-        // 👇 PASO 6. Guarda los datos del documento enviado
-        const prm_id_fact = id_fact;
-        const prm_numfact = Number(result.rows[0].numfact);
-        const prm_id_doc = null;
-        const prm_codtipdoc = 'FACTURA';
-        const prm_num_control = response.data.invoice_list_success[0].control_number;
-        const prm_url_pdf = response.data.invoice_list_success[0].invoice_pdf;
-        const prm_codusu = codigo_usuario;
+        // 👇 PASO 7. Realiza la actualizacion de exito del registro de la factura    
+        const prm_num_control = response.data.invoice_list_success[0].control_number.trim();
+        const prm_url_pdf = response.data.invoice_list_success[0].invoice_pdf.trim();
+        const prm_observacion_resault = response.data.message.trim();
 
         //
         try {
-            // registra la respuesta de la imprenta digta (N° Control y Url PDF)
-            const query1 = 'SELECT * FROM fn_api_post_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7, $8, $9)';
-            await poolSigesp.query(query1, [prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, 'SIGESP', null]);
+            // actualiza respuesta de exito ENVIADO
+            const queryExito = 'SELECT fn_api_put_integracion_documentos_fiscales($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) AS filas_act';
+            const resExito = await poolSigesp.query(queryExito, [prm_id_fact,  prm_numfact, prm_id_doc, prm_codtipdoc, 'ENVIADO', prm_num_control, prm_url_pdf, prm_observacion_resault, null, null]);
+            
+            // Convertimos el resultado a número entero
+            const filas_act = parseInt(resExito.rows[0].filas_act, 10);
+
+            if (filas_act <= 0) {
+                throw new Error (`🚨 CRÍTICO: Factura ${prm_numfact} creada en CGI, pero falló la actualizacion local`)
+            }
 
         } catch (dbError) {
-            // 🚨 LOG CRÍTICO: La factura existe en el ente externo, pero no se guardó localmente.
-            // Aquí usamos console.error, pero idealmente deberías usar una librería como Winston 
-            // o guardar este error en un archivo de texto para no perder el rastro.
-            console.error(`🚨 CRÍTICO: Factura ${prm_numfact} creada en CGI, pero falló guardado local:`, dbError);
-            
-            // ¡MUY IMPORTANTE! NO hacemos 'throw' aquí. 
-            // Dejamos que el código continúe para que el cliente reciba su respuesta de éxito.
+            console.error(dbError);
         }
 
         // retornamos la respuesta
         return response.data.invoice_list_success[0];
         
     } catch (error: any) {
+        // TODO: AQUI HAY QUE LLAMAR AL SP PARA ACTUALIZAR EL POSIBLE ERROR
+
         if (error instanceof AppError) {
             throw error; // ✅ ya tiene statusCode y location
         }
