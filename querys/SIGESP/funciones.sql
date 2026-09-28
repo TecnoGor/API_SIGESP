@@ -151,13 +151,15 @@ $function$
 -- DROP FUNCTION public.fn_api_get_factura_detalle(int4);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_factura_detalle(prm_id_fact integer)
- RETURNS TABLE(numfact character varying, coddetalle character varying, "nombreProducto" character varying, "descripcionProducto" character varying, "tipoImpuesto" character varying, "cantidadAdquirida" numeric, "precioProducto" character varying, numpririf character varying, nombre_cliente character varying, emailcliente character varying, dircliente character varying, telcliente character varying, tasa_del_dia character varying, fecha_tasa character varying, num_control character varying)
+ RETURNS TABLE(numero_serie character varying, numfact character varying, coddetalle character varying, "nombreProducto" character varying, "descripcionProducto" character varying, "tipoImpuesto" character varying, "cantidadAdquirida" numeric, "precioProducto" character varying, numpririf character varying, nombre_cliente character varying, emailcliente character varying, dircliente character varying, telcliente character varying, tasa_del_dia character varying, fecha_tasa character varying, num_control character varying, estado character varying, observacion text)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
 	    RETURN QUERY
 	
 		SELECT
+			'A'::varchar AS numero_serie, 
+
 			-- 1. Formateo de número de factura a 7 ceros (ej. '0000011')
 			LPAD(f.numfact::text, 7, '0')::varchar AS numfact,
 			
@@ -210,7 +212,6 @@ AS $function$
 		
 			-- 7. Precio con COMA como separador decimal (Ej: "1,55")
 			REPLACE(TO_CHAR(COALESCE(d.precio_detalle, 0.00), 'FM999999990.00'), '.', ',')::varchar AS "precioProducto",
-			-- REPLACE(TO_CHAR(COALESCE(d.neto_detalle, 0.00), 'FM999999990.00'), '.', ',')::varchar AS "precioProducto",
 			
 			-- 8. Documento RIF sin espacios
 			UPPER(TRIM(COALESCE(NULLIF(cl.tipperrif, ''), 'V') || TRIM(COALESCE(NULLIF(cl.numpririf, ''), '00000000')) || COALESCE(NULLIF(cl.numterrif, ''), '')))::varchar AS numpririf,
@@ -223,11 +224,13 @@ AS $function$
 			
 			-- 10. Datos de la tasa de las divisas
 			TO_CHAR(p.valor::numeric, 'FM000.0000')::varchar AS tasa_del_dia,
-			-- p.valor:: float AS tasa_del_dia,	
 			TO_CHAR(p.fecha_cambio, 'YYYY-MM-DD')::varchar AS fecha_tasa,
 		
-			-- 10. Numero de Control sin espacios
-			TRIM(idc.num_control)::varchar AS num_control
+			-- 11. Numero de Control sin espacios
+			TRIM(idc.num_control)::varchar AS num_control,
+
+			UPPER(TRIM(COALESCE(idc.estado, '')))::varchar AS estado,
+			UPPER(TRIM(COALESCE(idc.observacion, '')))::text AS observacion	
 		FROM 
 			cxc_detalle d 
 			INNER JOIN cxc_factura f ON f.id_fact = d.id_fact AND f.codproceso = d.codproceso 
@@ -236,7 +239,7 @@ AS $function$
 			LEFT JOIN soc_servicios s ON s.codser=d.coddetalle AND d.id_tipodetalle = 'SERVI' 
 			LEFT JOIN cxc_conceptofac c ON c.codconfac=d.coddetalle AND d.id_tipodetalle = 'CONCE'
 			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA'
-			LEFT JOIN public.parametro p ON p.parametro_id = 1 AND p.fecha_cambio::date = CURRENT_DATE
+			LEFT JOIN parametro p ON p.parametro_id = 1 AND p.fecha_cambio::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
 		WHERE  
 			f.codproceso='FACTURA' 
 		AND f.id_fact=prm_id_fact		
@@ -270,7 +273,7 @@ $function$
 -- DROP FUNCTION public.fn_api_get_nota_credito_detalle(int4);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_nota_credito_detalle(prm_id_doc integer)
- RETURNS TABLE(numfact character varying, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, motivo character varying, coddetalle character varying, cantidad_detdoc numeric, descripcion character varying, num_control character varying)
+ RETURNS TABLE(numfact character varying, id_doc integer, coddoc character varying, numdoc integer, id_fact integer, motivo character varying, coddetalle character varying, cantidad_detdoc numeric, descripcion character varying, num_control character varying, estado character varying, observacion text)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -314,7 +317,10 @@ AS $function$
 			)::varchar AS descripcion,
 			
 			-- 5. Numero de Control sin espacios
-			TRIM(idc.num_control)::varchar AS num_control
+			TRIM(idc.num_control)::varchar AS num_control,
+
+			UPPER(TRIM(COALESCE(idc.estado, '')))::varchar AS estado,
+			UPPER(TRIM(COALESCE(idc.observacion, '')))::text AS observacion	
 		FROM 
 			cxc_documento doc
 			INNER JOIN cxc_dt_documento dtn ON doc.id_doc = dtn.id_doc
@@ -332,7 +338,7 @@ $function$
 -- DROP FUNCTION public.fn_api_get_retencion_islr_detalle(bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_islr_detalle(prm_numcom character)
- RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, cmp_codret character varying, consol text, totcmp_con_iva character varying, basimp character varying, sustraendo character varying, porded character varying, cmp_monret character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, id_codigo_ret character varying, num_control character varying, cantidad_doc_ret integer)
+ RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, cmp_codret character varying, consol text, totcmp_con_iva character varying, basimp character varying, sustraendo character varying, porded character varying, cmp_monret character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, id_codigo_ret character varying, num_control character varying, cantidad_doc_ret integer, estado character varying, observacion text)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -399,7 +405,10 @@ AS $function$
 			-- 3. Numero de Control sin espacios
 			TRIM(idr.num_control)::varchar AS num_control,
 			
-			p.cantidad_doc_ret
+			p.cantidad_doc_ret,
+
+			UPPER(TRIM(COALESCE(idr.estado, '')))::varchar AS estado,
+			UPPER(TRIM(COALESCE(idr.observacion, '')))::text AS observacion	
 		FROM 	
 			scb_cmp_ret cmp
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
@@ -425,7 +434,7 @@ $function$
 -- DROP FUNCTION public.fn_api_get_retencion_iva_detalle(bpchar);
 
 CREATE OR REPLACE FUNCTION public.fn_api_get_retencion_iva_detalle(prm_numcom character)
- RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, nota_credito character varying, nota_debito character varying, factura_afectada character varying, totcmp_con_iva character varying, compsinderiva character varying, basimp character varying, porimp character varying, porded character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, num_control character varying, cantidad_doc_ret integer)
+ RETURNS TABLE(numcom character varying, numsol character varying, numope character varying, numfac character varying, numcon character varying, fecfac character varying, nota_credito character varying, nota_debito character varying, factura_afectada character varying, totcmp_con_iva character varying, compsinderiva character varying, basimp character varying, porimp character varying, porded character varying, rif character varying, nomsujret character varying, email character varying, dirsujret character varying, telefono character varying, num_control character varying, cantidad_doc_ret integer, estado character varying, observacion text)
  LANGUAGE plpgsql
 AS $function$
 	BEGIN
@@ -486,7 +495,10 @@ AS $function$
 			-- 2. Numero de Control sin espacios
 			TRIM(idr.num_control)::varchar AS num_control,
 			
-			p.cantidad_doc_ret
+			p.cantidad_doc_ret,
+
+			UPPER(TRIM(COALESCE(idr.estado, '')))::varchar AS estado,
+			UPPER(TRIM(COALESCE(idr.observacion, '')))::text AS observacion	
 		FROM 	
 			scb_cmp_ret cmp
 			INNER JOIN scb_dt_cmp_ret dt ON cmp.codemp = dt.codemp AND cmp.codret = dt.codret AND cmp.numcom = dt.numcom AND cmp.tipsolpag = dt.tipsolpag
@@ -817,32 +829,48 @@ AS $function$
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_post_integracion_documentos_fiscales(int4, int4, int4, varchar, varchar, text, varchar, varchar, int4);
+-- DROP FUNCTION public.fn_api_post_integracion_documentos_fiscales(int4, int4, int4, varchar, varchar, varchar, text, text, varchar, varchar, int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_fiscales(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_origen integer)
- RETURNS void
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_fiscales(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_estado character varying, prm_num_control character varying, prm_url_pdf text, prm_observacion text, prm_codusu character varying, prm_api_modulo character varying, prm_id_origen integer)
+ RETURNS integer
  LANGUAGE plpgsql
 AS $function$
+	DECLARE
+    	v_filas_afectadas integer := 0;
+
 	BEGIN
-		INSERT INTO api_integracion_documentos_fiscales 
-			(id_fact, numfact, id_doc, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_origen) 
-		VALUES 
-			(prm_id_fact, prm_numfact, prm_id_doc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_origen);
+		INSERT INTO public.api_integracion_documentos_fiscales 
+	        (id_fact, numfact, id_doc, codtipdoc, estado, num_control, url_pdf, observacion, codusu, api_modulo, api_id_origen) 
+	    VALUES 
+	        (prm_id_fact, prm_numfact, prm_id_doc, UPPER(TRIM(prm_codtipdoc)), UPPER(TRIM(prm_estado)), prm_num_control, prm_url_pdf, TRIM(prm_observacion), TRIM(prm_codusu), UPPER(TRIM(prm_api_modulo)), prm_id_origen )
+	    ON CONFLICT DO NOTHING;
+	
+	    GET DIAGNOSTICS v_filas_afectadas = ROW_COUNT;
+	
+	    RETURN v_filas_afectadas;
 	END;
 $function$
 ;
 
--- DROP FUNCTION public.fn_api_post_integracion_documentos_retenciones(varchar, varchar, varchar, varchar, text, varchar, varchar, int4);
+-- DROP FUNCTION public.fn_api_post_integracion_documentos_retenciones(varchar, varchar, varchar, varchar, varchar, text, text, varchar, varchar, int4);
 
-CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_retenciones(prm_numcom character varying, prm_numsol character varying, prm_codtipdoc character varying, prm_num_control character varying, prm_url_pdf text, prm_codusu character varying, prm_modulo character varying, prm_id_origen integer)
- RETURNS void
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_retenciones(prm_numcom character varying, prm_numsol character varying, prm_codtipdoc character varying, prm_estado character varying, prm_num_control character varying, prm_url_pdf text, prm_observacion text, prm_codusu character varying, prm_api_modulo character varying, prm_id_origen integer)
+ RETURNS integer
  LANGUAGE plpgsql
 AS $function$
+	DECLARE
+    	v_filas_afectadas integer := 0;
+
 	BEGIN
 		INSERT INTO api_integracion_documentos_retenciones 
-			(numcom, numsol, codtipdoc, num_control, url_pdf, codusu, api_modulo, api_id_origen) 
+			(numcom, numsol, codtipdoc, estado, num_control, url_pdf, observacion, codusu, api_modulo, api_id_origen) 
 		VALUES 
-			(prm_numcom, prm_numsol, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_codusu, prm_modulo, prm_id_origen);
+			(prm_numcom, prm_numsol, UPPER(TRIM(prm_codtipdoc)), UPPER(TRIM(prm_estado)), prm_num_control, prm_url_pdf, TRIM(prm_observacion), TRIM(prm_codusu), UPPER(TRIM(prm_api_modulo)), prm_id_origen )
+	    ON CONFLICT DO NOTHING;
+	
+	    GET DIAGNOSTICS v_filas_afectadas = ROW_COUNT;
+	
+	    RETURN v_filas_afectadas;
 	END;
 $function$
 ;
@@ -857,6 +885,77 @@ BEGIN
     UPDATE 	public.api_integracion_parametros 
     SET		tasa_del_dia = prm_tasa_del_dia,        
         	fecha_tasa = prm_fecha_tasa::date;
+END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_put_integracion_documentos_fiscales(int4, int4, int4, varchar, varchar, text, text);
+
+CREATE OR REPLACE FUNCTION public.fn_api_put_integracion_documentos_fiscales(prm_id_fact integer, prm_numfact integer, prm_id_doc integer, prm_codtipdoc character varying, prm_num_control character varying DEFAULT NULL::character varying, prm_url_pdf text DEFAULT NULL::text, prm_observacion text DEFAULT NULL::text)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_filas_actualizadas integer := 0;
+    v_codtipdoc varchar(10);
+BEGIN
+    -- 1. Normalizamos el tipo de documento una sola vez
+    v_codtipdoc := UPPER(TRIM(prm_codtipdoc));
+
+    -- 2. Bifurcamos para garantizar que PostgreSQL use los índices parciales correctos
+    IF v_codtipdoc = 'FACTURA' THEN    
+        UPDATE 	public.api_integracion_documentos_fiscales
+        SET		num_control = COALESCE(NULLIF(TRIM(prm_num_control), ''), num_control),
+				url_pdf = COALESCE(NULLIF(TRIM(prm_url_pdf), ''), url_pdf),				
+				observacion = COALESCE(NULLIF(TRIM(prm_observacion), ''), observacion)				
+        WHERE 	codtipdoc = 'FACTURA'
+		AND 	id_fact = prm_id_fact
+		AND 	numfact = prm_numfact;
+          
+    ELSIF v_codtipdoc = 'NC' THEN    
+        UPDATE 	public.api_integracion_documentos_fiscales
+        SET		num_control = COALESCE(NULLIF(TRIM(prm_num_control), ''), num_control),
+				url_pdf = COALESCE(NULLIF(TRIM(prm_url_pdf), ''), url_pdf),				
+				observacion = COALESCE(NULLIF(TRIM(prm_observacion), ''), observacion)				
+        WHERE 	codtipdoc = 'NC'
+		AND 	id_fact = prm_id_fact
+		AND 	id_doc = prm_id_doc;
+    END IF;
+
+    -- 3. Obtenemos las filas afectadas (será 1 o 0 debido a los índices únicos)
+    GET DIAGNOSTICS v_filas_actualizadas = ROW_COUNT;
+
+    RETURN v_filas_actualizadas;
+END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_put_integracion_documentos_retenciones(varchar, varchar, varchar, varchar, text, text);
+
+CREATE OR REPLACE FUNCTION public.fn_api_put_integracion_documentos_retenciones(prm_numcom character varying, prm_numsol character varying, prm_codtipdoc character varying, prm_num_control character varying DEFAULT NULL::character varying, prm_url_pdf text DEFAULT NULL::text, prm_observacion text DEFAULT NULL::text)
+ RETURNS integer
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+    v_filas_actualizadas integer := 0;
+    v_codtipdoc varchar(10);
+BEGIN
+    -- 1. Normalizamos el tipo de documento una sola vez
+    v_codtipdoc := UPPER(TRIM(prm_codtipdoc));
+
+    -- 2. Bifurcamos para garantizar que PostgreSQL use los índices parciales correctos
+    UPDATE 	public.api_integracion_documentos_retenciones
+	SET		num_control = COALESCE(NULLIF(TRIM(prm_num_control), ''), num_control),
+			url_pdf = COALESCE(NULLIF(TRIM(prm_url_pdf), ''), url_pdf),				
+			observacion = COALESCE(NULLIF(TRIM(prm_observacion), ''), observacion)	
+    WHERE 	codtipdoc = v_codtipdoc
+	AND 	numcom = TRIM(prm_numcom)
+	AND 	numsol = TRIM(prm_numsol);
+
+    -- 3. Obtenemos las filas afectadas (será 1 o 0 debido a los índices únicos)
+    GET DIAGNOSTICS v_filas_actualizadas = ROW_COUNT;
+
+    RETURN v_filas_actualizadas;
 END;
 $function$
 ;

@@ -1,4 +1,4 @@
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export interface INotaCreditoDetalle {
     numfact: string;
     id_doc: number;
@@ -10,4 +10,6 @@ export interface INotaCreditoDetalle {
     cantidad_detdoc: number;
     descripcion: string;
     num_control?: string | null;
+    estado?: "ERROR" | "ENVIADO" | "RECHAZADO" | null;
+    observacion?: string | null;
 }

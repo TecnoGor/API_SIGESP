@@ -1,24 +1,26 @@
-// ? VERIFICADA - 27-07-2026
+// ? LISTA: 17-09-2026
 export interface IRetencionIslr {
     numcom: string;
-    numsol: string;  
+    numsol: string;
     numope: string;
-    numfac: string;  
-    numcon: string;  
-    fecfac: string;  
-    cmp_codret: string;  
-    consol: string;  
+    numfac: string;
+    numcon: string;
+    fecfac: string;
+    cmp_codret: string;
+    consol: string;
     totcmp_con_iva: string;
     basimp: string;
     sustraendo: string;
-    porded: string;  
+    porded: string;
     cmp_monret: string;
     rif: string;
     nomsujret: string;
     email: string;
-    dirsujret: string;  
-    telefono: string;  
+    dirsujret: string;
+    telefono: string;
     id_codigo_ret: string;
     num_control: string;
-    cantidad_doc_ret:number;
+    cantidad_doc_ret: number;
+    estado: string;
+    observacion: string;
 }
