@@ -56,11 +56,11 @@ export async function postAgregarRetencionIsrlService(
         }
 
         //
-        const estado = result.rows[0].estado?.trim();
-        const observacion = result.rows[0].observacion?.trim();
-        const numControl = result.rows[0]?.num_control?.trim();
-        numsol = result.rows[0]?.numsol?.trim();
-        prm_numcom = result.rows[0]?.numcom?.trim();
+        const estado = result.rows[0].estado?.trim() ?? "";
+        const observacion = result.rows[0].observacion?.trim() ?? "";
+        const numControl = result.rows[0]?.num_control?.trim() ?? "";
+        numsol = result.rows[0]?.numsol?.trim() ?? "";
+        prm_numcom = result.rows[0]?.numcom?.trim() ?? "";
 
         // 👇 PASO 4. Verifico el estado del documento (NOTA DE CREDITO).
         if (estado?.toUpperCase() === "RECHAZADO") {
@@ -88,36 +88,39 @@ export async function postAgregarRetencionIsrlService(
         const detalleRet: IRetencionIslrDetPayload[] = result.rows.map(
             (row) => {
                 return {
-                    numeroDocumento: row.numfac.trim(),
-                    numeroControl: row.numcon.trim(),
-                    fecha: row.fecfac.trim(),
-                    codigo: row.numope.trim(), // row.cmp_codret.trim(),
-                    conceptoPago: row.consol.trim(),
+                    numeroDocumento: row.numfac?.trim() ?? "",
+                    numeroControl: row.numcon?.trim() ?? "",
+                    fecha: row.fecfac?.trim() ?? "",
+                    codigo: row.numope?.trim() ?? "",
+                    conceptoPago: row.consol?.trim() ?? "",
                     montoDocumento: row.totcmp_con_iva,
                     baseRetencion: row.basimp,
                     sustraendo: row.sustraendo,
-                    porcentaje: row.porded.trim(),
+                    porcentaje: row.porded?.trim() ?? "",
                     montoRetenido: row.cmp_monret,
-                    codigoRetencionIslr: row.id_codigo_ret.trim(),
+                    codigoRetencionIslr: row.id_codigo_ret?.trim() ?? "",
                 };
             },
         );
 
-        // 👇 PASO 6. Se validan los campos requeridos y formatos
+        // 👇 PASO 5. Se validan los campos requeridos y formatos
         await validarPayloadRetencionIslr(encabezadoRet, detalleRet);
 
-        // 👇 PASO 7. Construir objeto para enviarlo a la api externa
+        // 👇 PASO 6. Construir objeto para enviarlo a la api externa
         const payLoad = {
             data: [
                 {
                     cliente: [
                         {
-                            documentoIdentidadCliente: encabezadoRet.rif.trim(),
+                            documentoIdentidadCliente:
+                                encabezadoRet.rif?.trim() ?? "",
                             nombreRazonSocialCliente:
-                                encabezadoRet.nomsujret.trim(),
-                            correoCliente: encabezadoRet.email.trim(),
-                            direccionCliente: encabezadoRet.dirsujret.trim(),
-                            telefonoCliente: encabezadoRet.telefono.trim(),
+                                encabezadoRet.nomsujret?.trim() ?? "",
+                            correoCliente: encabezadoRet.email?.trim() ?? "",
+                            direccionCliente:
+                                encabezadoRet.dirsujret?.trim() ?? "",
+                            telefonoCliente:
+                                encabezadoRet.telefono?.trim() ?? "",
                         },
                     ],
                     retencionIslr: detalleRet,
@@ -125,7 +128,7 @@ export async function postAgregarRetencionIsrlService(
             ],
         };
 
-        // 👇 PASO 8. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // 👇 PASO 7. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
         // No le pasamos headers, ni baseURL, ni Authorization.
         // El interceptor hace todo eso antes de salir de tu backend.
         const response = await apiExternaClient.post(
@@ -137,7 +140,11 @@ export async function postAgregarRetencionIsrlService(
         const datosResp = response?.data;
 
         // Validamos que sea un objeto plano válido
-        if (!datosResp || typeof datosResp !== "object") {
+        if (
+            !datosResp ||
+            typeof datosResp !== "object" ||
+            Array.isArray(datosResp)
+        ) {
             throw new AppError(
                 `El proveedor devolvió una estructura de respuesta inválida para la retencion de ISLR ${prm_numcom}.`,
                 502,
@@ -145,7 +152,7 @@ export async function postAgregarRetencionIsrlService(
             );
         }
 
-        if (!datosResp.success) {
+        if (datosResp.success === false) {
             // Validamos y obtengo la respuesta
             const msgProveedor =
                 typeof datosResp.message === "string"
@@ -154,11 +161,11 @@ export async function postAgregarRetencionIsrlService(
 
             const errorMsg = `${msgProveedor} ${prm_numcom}`;
 
-            // 👇 PASO 8.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
+            // 👇 PASO 7.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
                 estatusEnvioRedis: 0,
-                numcom: prm_numcom.trim(),
-                numsol: numsol.trim(),
+                numcom: (prm_numcom ?? "").trim(),
+                numsol: (numsol ?? "").trim(),
                 codtipdoc: "ISLR",
                 estado: "RECHAZADO",
                 num_control: null,
@@ -176,71 +183,35 @@ export async function postAgregarRetencionIsrlService(
             );
         }
 
-        // Validamos y obtengo el mensaje de la respuesta
+        // 1. Validar Mensaje de éxito
         const msgExito =
             typeof datosResp.Mensaje === "string"
                 ? datosResp.Mensaje.trim()
-                : "Sin detalle del proveedor";
+                : "Retenciones guardadas con éxito.";
 
-        // Validacion estricta de Exito
-        const listaControlesExitosa = datosResp.controles_usados;
-
-        if (
-            !Array.isArray(listaControlesExitosa) ||
-            listaControlesExitosa.length === 0
-        ) {
-            throw new AppError(
-                `El proveedor procesó la solicitud (200 OK) pero no devolvió la lista de éxito para la retencion de ISLR ${prm_numcom}.`,
-                502,
-                "service:postAgregarRetencionIsrlService",
-            );
-        }
-
-        // Extraemos el objeto de éxito de forma segura (si no existe, usamos un objeto vacío para evitar errores de undefined)
-        const controlesUsados = listaControlesExitosa[0];
-
-        // Extraemos, Normalizamos y validamos estrictamente que los campos obligatorios del contrato NO estén vacíos ni solo tengan espacios
+        // 2. Extraer número de control de forma segura (Arreglo simple)
+        const rawControl = datosResp.controles_usados?.[0];
         const control_number =
-            typeof controlesUsados === "string" ? controlesUsados.trim() : "";
+            typeof rawControl === "string" ? rawControl.trim() : "";
 
-        // Validacion estricta de Exito
-        const listaPdfExitosa = datosResp.pdf;
+        // 3. Extraer URL del PDF de forma segura (Arreglo anidado)
+        const rawPdf = datosResp.pdf?.[0]?.[0];
+        const retention_pdf = typeof rawPdf === "string" ? rawPdf.trim() : "";
 
-        if (
-            !Array.isArray(listaPdfExitosa) ||
-            listaPdfExitosa.length === 0 ||
-            !Array.isArray(listaPdfExitosa[0]) ||
-            listaPdfExitosa[0].length === 0
-        ) {
-            throw new AppError(
-                `El proveedor procesó la solicitud (200 OK) pero no devolvió la lista de éxito para la retencion de ISLR ${prm_numcom}.`,
-                502,
-                "service:postAgregarRetencionIsrlService",
-            );
-        }
-
-        // Extraemos el objeto de éxito de forma segura (si no existe, usamos un objeto vacío para evitar errores de undefined)
-        const pdfDisponibles = listaPdfExitosa[0];
-
-        // Extraemos, Normalizamos y validamos estrictamente que los campos obligatorios del contrato NO estén vacíos ni solo tengan espacios
-        const retention_pdf =
-            typeof pdfDisponibles[0] === "string"
-                ? pdfDisponibles[0].trim()
-                : "";
-
+        // 4. Validación final de campos obligatorios
         if (!control_number || !retention_pdf) {
             throw new AppError(
-                `El proveedor procesó la retencion de ISLR ${prm_numcom} pero omitió campos fiscales obligatorios (control_number o retention_pdf).`,
+                `El proveedor procesó la retencion de ISLR ${prm_numcom} (200 OK) pero omitió campos fiscales obligatorios (control_number o retention_pdf).`,
                 502,
                 "service:postAgregarRetencionIsrlService",
             );
         }
 
-        // 👇 PASO 9. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
+        // 👇 PASO 8. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
         await func.actualizarKeyRedis(documento, {
             estatusEnvioRedis: 1,
-            numcom: prm_numcom.trim(),
-            numsol: numsol.trim(),
+            numcom: (prm_numcom ?? "").trim(),
+            numsol: (numsol ?? "").trim(),
             codtipdoc: "ISLR",
             estado: "ENVIADO",
             num_control: (control_number ?? "").trim(),
@@ -374,11 +345,11 @@ export async function postAgregarRetencionIvaService(
         }
 
         //
-        const estado = result.rows[0].estado?.trim();
-        const observacion = result.rows[0].observacion?.trim();
-        const numControl = result.rows[0]?.num_control?.trim();
-        numsol = result.rows[0]?.numsol?.trim();
-        prm_numcom = result.rows[0]?.numcom?.trim();
+        const estado = result.rows[0].estado?.trim() ?? "";
+        const observacion = result.rows[0].observacion?.trim() ?? "";
+        const numControl = result.rows[0]?.num_control?.trim() ?? "";
+        numsol = result.rows[0]?.numsol?.trim() ?? "";
+        prm_numcom = result.rows[0]?.numcom?.trim() ?? "";
 
         // 👇 PASO 4. Verifico el estado del documento (NOTA DE CREDITO).
         if (estado?.toUpperCase() === "RECHAZADO") {
@@ -405,35 +376,38 @@ export async function postAgregarRetencionIvaService(
         // Datos del detalle de la retencion
         const detalleRet: IRetencionIvaDetPayload[] = result.rows.map((row) => {
             return {
-                fechaDeFactura: row.fecfac.trim(),
-                numeroFactura: row.numfac.trim(),
-                numeroControl: row.numcon.trim(),
-                numeroNotaDeCredito: row.nota_credito.trim(),
-                numeroNotaDeDebito: row.nota_debito.trim(),
-                numeroFacturaAfectada: row.factura_afectada.trim(),
+                fechaDeFactura: row.fecfac?.trim() ?? "",
+                numeroFactura: row.numfac?.trim() ?? "",
+                numeroControl: row.numcon?.trim() ?? "",
+                numeroNotaDeCredito: row.nota_credito?.trim() ?? "",
+                numeroNotaDeDebito: row.nota_debito?.trim() ?? "",
+                numeroFacturaAfectada: row.factura_afectada?.trim() ?? "",
                 totalDeCompraIncluyendoIva: row.totcmp_con_iva,
                 compraSinDerechoACreditoFiscal: row.compsinderiva,
                 baseImponible: row.basimp,
-                porcentaje_iva: row.porimp.trim(),
-                porcentaje: row.porded.trim(),
+                porcentaje_iva: row.porimp?.trim() ?? "",
+                porcentaje: row.porded?.trim() ?? "",
             };
         });
 
-        // 👇 PASO 6. Se validan los campos requeridos y formatos
+        // 👇 PASO 5. Se validan los campos requeridos y formatos
         await validarPayloadRetencionIva(encabezadoRet, detalleRet);
 
-        // 👇 PASO 7. Construir objeto para enviarlo a la api externa
+        // 👇 PASO 6. Construir objeto para enviarlo a la api externa
         const payLoad = {
             data: [
                 {
                     cliente: [
                         {
-                            documentoIdentidadCliente: encabezadoRet.rif.trim(),
+                            documentoIdentidadCliente:
+                                encabezadoRet.rif?.trim() ?? "",
                             nombreRazonSocialCliente:
-                                encabezadoRet.nomsujret.trim(),
-                            correoCliente: encabezadoRet.email.trim(),
-                            direccionCliente: encabezadoRet.dirsujret.trim(),
-                            telefonoCliente: encabezadoRet.telefono.trim(),
+                                encabezadoRet.nomsujret?.trim() ?? "",
+                            correoCliente: encabezadoRet.email?.trim() ?? "",
+                            direccionCliente:
+                                encabezadoRet.dirsujret?.trim() ?? "",
+                            telefonoCliente:
+                                encabezadoRet.telefono?.trim() ?? "",
                         },
                     ],
                     RetencionIva: detalleRet,
@@ -441,7 +415,7 @@ export async function postAgregarRetencionIvaService(
             ],
         };
 
-        // 👇 PASO 8. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
+        // 👇 PASO 7. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
         // No le pasamos headers, ni baseURL, ni Authorization.
         // El interceptor hace todo eso antes de salir de tu backend.
         const response = await apiExternaClient.post(
@@ -453,7 +427,11 @@ export async function postAgregarRetencionIvaService(
         const datosResp = response?.data;
 
         // Validamos que sea un objeto plano válido
-        if (!datosResp || typeof datosResp !== "object") {
+        if (
+            !datosResp ||
+            typeof datosResp !== "object" ||
+            Array.isArray(datosResp)
+        ) {
             throw new AppError(
                 `El proveedor devolvió una estructura de respuesta inválida para la retencion de IVA ${prm_numcom}.`,
                 502,
@@ -461,7 +439,7 @@ export async function postAgregarRetencionIvaService(
             );
         }
 
-        if (!datosResp.success) {
+        if (datosResp.success === false) {
             // Validamos y obtengo la respuesta
             const msgProveedor =
                 typeof datosResp.message === "string"
@@ -470,11 +448,11 @@ export async function postAgregarRetencionIvaService(
 
             const errorMsg = `${msgProveedor} ${prm_numcom}`;
 
-            // 👇 PASO 8.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
+            // 👇 PASO 7.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
                 estatusEnvioRedis: 0,
-                numcom: prm_numcom.trim(),
-                numsol: numsol.trim(),
+                numcom: (prm_numcom ?? "").trim(),
+                numsol: (numsol ?? "").trim(),
                 codtipdoc: "IVA",
                 estado: "RECHAZADO",
                 num_control: null,
@@ -492,71 +470,34 @@ export async function postAgregarRetencionIvaService(
             );
         }
 
-        // Validamos y obtengo el mensaje de la respuesta
+        // 1. Validar Mensaje de éxito
         const msgExito =
             typeof datosResp.Mensaje === "string"
                 ? datosResp.Mensaje.trim()
-                : "Sin detalle del proveedor";
+                : "Retenciones guardadas con éxito.";
 
-        // Validacion estricta de Exito
-        const listaControlesExitosa = datosResp.controles_usados;
-
-        if (
-            !Array.isArray(listaControlesExitosa) ||
-            listaControlesExitosa.length === 0
-        ) {
-            throw new AppError(
-                `El proveedor procesó la solicitud (200 OK) pero no devolvió la lista de éxito para la retencion de IVA ${prm_numcom}.`,
-                502,
-                "service:postAgregarRetencionIvaService",
-            );
-        }
-
-        // Extraemos el objeto de éxito de forma segura (si no existe, usamos un objeto vacío para evitar errores de undefined)
-        const controlesUsados = listaControlesExitosa[0];
-
-        // Extraemos, Normalizamos y validamos estrictamente que los campos obligatorios del contrato NO estén vacíos ni solo tengan espacios
+        // 2. Extraer número de control de forma segura (Arreglo simple)
+        const rawControl = datosResp.controles_usados?.[0];
         const control_number =
-            typeof controlesUsados === "string" ? controlesUsados.trim() : "";
+            typeof rawControl === "string" ? rawControl.trim() : "";
 
-        // Validacion estricta de Exito
-        const listaPdfExitosa = datosResp.pdf;
-
-        if (
-            !Array.isArray(listaPdfExitosa) ||
-            listaPdfExitosa.length === 0 ||
-            !Array.isArray(listaPdfExitosa[0]) ||
-            listaPdfExitosa[0].length === 0
-        ) {
-            throw new AppError(
-                `El proveedor procesó la solicitud (200 OK) pero no devolvió la lista de éxito para la retencion de IVA ${prm_numcom}.`,
-                502,
-                "service:postAgregarRetencionIvaService",
-            );
-        }
-
-        // Extraemos el objeto de éxito de forma segura (si no existe, usamos un objeto vacío para evitar errores de undefined)
-        const pdfDisponibles = listaPdfExitosa[0];
-
-        // Extraemos, Normalizamos y validamos estrictamente que los campos obligatorios del contrato NO estén vacíos ni solo tengan espacios
-        const retention_pdf =
-            typeof pdfDisponibles[0] === "string"
-                ? pdfDisponibles[0].trim()
-                : "";
+        // 3. Extraer URL del PDF de forma segura (Arreglo anidado)
+        const rawPdf = datosResp.pdf?.[0]?.[0];
+        const retention_pdf = typeof rawPdf === "string" ? rawPdf.trim() : "";
 
         if (!control_number || !retention_pdf) {
             throw new AppError(
-                `El proveedor procesó la retencion de IVA ${prm_numcom} pero omitió campos fiscales obligatorios (control_number o retention_pdf).`,
+                `El proveedor procesó la retencion de IVA ${prm_numcom} (200 OK) pero omitió campos fiscales obligatorios (control_number o retention_pdf).`,
                 502,
                 "service:postAgregarRetencionIvaService",
             );
         }
 
-        // 👇 PASO 9. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
+        // 👇 PASO 8. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
         await func.actualizarKeyRedis(documento, {
             estatusEnvioRedis: 1,
-            numcom: prm_numcom.trim(),
-            numsol: numsol.trim(),
+            numcom: (prm_numcom ?? "").trim(),
+            numsol: (numsol ?? "").trim(),
             codtipdoc: "IVA",
             estado: "ENVIADO",
             num_control: (control_number ?? "").trim(),
@@ -1047,45 +988,3 @@ const safeTrim = (val: any, fallback = "Error desconocido"): string => {
     if (typeof val === "string") return val.trim();
     return val ? JSON.stringify(val) : fallback;
 };
-
-// ! NO APLICA: 17-09-2026
-// export async function getRetencionesIslrService(): Promise<IRetencion[]> {
-//     try {
-//         //
-//         const response = await apiExternaClient.get<IRetencion[]>('/api/Invoice/get_retention_islr');
-
-//         return response.data;
-
-//     } catch (error: any) {
-//         if (error instanceof AppError) {
-//             throw error; // ✅ ya tiene statusCode y location
-//         }
-
-//         if (error?.response?.data) {
-//             throw new AppError(error.response.data.message.trim(), error.response.status, "service:getRetencionesIslrService");
-//         }
-
-//         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:getRetencionesIslrService");
-//     }
-// }
-
-// ! NO APLICA: 17-09-2026
-// export async function getRetencionesIvaService(): Promise<IRetencion[]> {
-//     try {
-//         //
-//         const response = await apiExternaClient.get<IRetencion[]>('/api/Invoice/get_retention_iva');
-
-//         return response.data;
-
-//     } catch (error: any) {
-//         if (error instanceof AppError) {
-//             throw error; // ✅ ya tiene statusCode y location
-//         }
-
-//         if (error?.response?.data) {
-//             throw new AppError(error.response.data.message.trim(), error.response.status, "service:getRetencionesIvaService");
-//         }
-
-//         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:getRetencionesIvaService");
-//     }
-// }

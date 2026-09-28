@@ -52,9 +52,9 @@ export async function postAgregarService(
         }
 
         //
-        const estado = result.rows[0].estado?.trim();
-        const observacion = result.rows[0].observacion?.trim();
-        const numControl = result.rows[0]?.num_control?.trim();
+        const estado = result.rows[0].estado?.trim() ?? "";
+        const observacion = result.rows[0].observacion?.trim() ?? "";
+        const numControl = result.rows[0]?.num_control?.trim() ?? "";
         prm_numfact = Number(result.rows[0]?.numfact);
 
         // 👇 PASO 4. Verifico el estado del documento (FACTURA).
@@ -80,10 +80,10 @@ export async function postAgregarService(
         // Datos del detalle
         const detFactura: IFacturaDetPayload[] = result.rows.map((row) => {
             return {
-                codigoProducto: row.coddetalle.trim(),
-                nombreProducto: row.nombreProducto.trim(),
-                descripcionProducto: row.descripcionProducto.trim(),
-                tipoImpuesto: row.tipoImpuesto.trim(),
+                codigoProducto: row.coddetalle?.trim() ?? "",
+                nombreProducto: row.nombreProducto?.trim() ?? "",
+                descripcionProducto: row.descripcionProducto?.trim() ?? "",
+                tipoImpuesto: row.tipoImpuesto?.trim() ?? "",
                 cantidadAdquirida: Number(row.cantidadAdquirida),
                 precioProducto: row.precioProducto,
             };
@@ -94,19 +94,21 @@ export async function postAgregarService(
 
         // 👇 PASO 6. Construir objeto para enviarlo a la api externa
         const payLoad = {
-            numeroSerie: encFactura.numero_serie.trim(),
+            numeroSerie: encFactura.numero_serie?.trim() ?? "",
             cantidadFactura: 1,
             facturas: [
                 {
-                    numeroFactura: encFactura.numfact.trim(),
-                    documentoIdentidadCliente: encFactura.numpririf.trim(),
-                    nombreRazonSocialCliente: encFactura.nombre_cliente.trim(),
-                    correoCliente: encFactura.emailcliente.trim(),
-                    direccionCliente: encFactura.dircliente.trim(),
-                    telefonoCliente: encFactura.telcliente.trim(),
+                    numeroFactura: encFactura.numfact?.trim() ?? "",
+                    documentoIdentidadCliente:
+                        encFactura.numpririf?.trim() ?? "",
+                    nombreRazonSocialCliente:
+                        encFactura.nombre_cliente?.trim() ?? "",
+                    correoCliente: encFactura.emailcliente?.trim() ?? "",
+                    direccionCliente: encFactura.dircliente?.trim() ?? "",
+                    telefonoCliente: encFactura.telcliente?.trim() ?? "",
                     productos: detFactura,
-                    tasa_del_dia: encFactura.tasa_del_dia?.trim(),
-                    fecha_tasa: encFactura.fecha_tasa?.trim(),
+                    tasa_del_dia: encFactura.tasa_del_dia?.trim() ?? "",
+                    fecha_tasa: encFactura.fecha_tasa?.trim() ?? "",
                     order_payment_methods: [],
                 },
             ],
@@ -124,7 +126,11 @@ export async function postAgregarService(
         const datosResp = response?.data;
 
         // Validamos que sea un objeto plano válido
-        if (!datosResp || typeof datosResp !== "object") {
+        if (
+            !datosResp ||
+            typeof datosResp !== "object" ||
+            Array.isArray(datosResp)
+        ) {
             throw new AppError(
                 `El proveedor devolvió una estructura de respuesta inválida para la factura ${prm_numfact}.`,
                 502,
@@ -202,6 +208,7 @@ export async function postAgregarService(
             typeof facturaExitosa.control_number === "string"
                 ? facturaExitosa.control_number.trim()
                 : "";
+
         const invoice_pdf =
             typeof facturaExitosa.invoice_pdf === "string"
                 ? facturaExitosa.invoice_pdf.trim()

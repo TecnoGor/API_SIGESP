@@ -55,12 +55,12 @@ export async function postCrearNCService(
         }
 
         //
-        const estado = result.rows[0].estado?.trim();
-        const observacion = result.rows[0].observacion?.trim();
-        const numControl = result.rows[0]?.num_control?.trim();
+        const estado = result.rows[0].estado?.trim() ?? "";
+        const observacion = result.rows[0].observacion?.trim() ?? "";
+        const numControl = result.rows[0]?.num_control?.trim() ?? "";
         id_fact = result.rows[0]?.id_fact;
         numfact = Number(result.rows[0]?.numfact);
-        prm_coddoc = result.rows[0]?.coddoc;
+        prm_coddoc = result.rows[0]?.coddoc?.trim() ?? "";
 
         // 👇 PASO 4. Verifico el estado del documento (NOTA DE CREDITO).
         if (estado?.toUpperCase() === "RECHAZADO") {
@@ -91,7 +91,7 @@ export async function postCrearNCService(
         if (!facturaEnviada) {
             throw new AppError(
                 `El número de factura ${numfact} asociada a la Nota de Crédito ${prm_coddoc}, no ha sido enviada a la imprenta digital.`,
-                401,
+                409,
                 "service:postCrearNCService",
             );
         }
@@ -104,9 +104,9 @@ export async function postCrearNCService(
 
         // 👇 PASO 7. Construir objeto para enviarlo a la api externa
         const payLoad = {
-            numeroFactura: datosNC.numfact.trim(), // Número de factura a afectar
-            numeroNotaCredito: datosNC.coddoc.trim(), // Número de nota de crédito a crear
-            descripcion: datosNC.motivo?.trim(), // Descripcion del motivo de la nota de crédito a crear
+            numeroFactura: datosNC.numfact?.trim() ?? "", // Número de factura a afectar
+            numeroNotaCredito: datosNC.coddoc?.trim() ?? "", // Número de nota de crédito a crear
+            descripcion: datosNC.motivo?.trim() ?? "", // Descripcion del motivo de la nota de crédito a crear
         };
 
         // 👇 PASO 8. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
@@ -121,7 +121,11 @@ export async function postCrearNCService(
         const datosResp = response?.data;
 
         // Validamos que sea un objeto plano válido
-        if (!datosResp || typeof datosResp !== "object") {
+        if (
+            !datosResp ||
+            typeof datosResp !== "object" ||
+            Array.isArray(datosResp)
+        ) {
             throw new AppError(
                 `El proveedor devolvió una estructura de respuesta inválida para la nota de credirto ${prm_coddoc}.`,
                 502,
@@ -141,8 +145,8 @@ export async function postCrearNCService(
             // 👇 PASO 8.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
                 estatusEnvioRedis: 0,
-                id_fact: id_fact,
-                numfact: numfact,
+                id_fact: id_fact ?? null,
+                numfact: numfact ?? null,
                 id_doc: id_doc,
                 codtipdoc: "NC",
                 estado: "RECHAZADO",
@@ -188,8 +192,8 @@ export async function postCrearNCService(
         // 👇 PASO 9. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
         await func.actualizarKeyRedis(documento, {
             estatusEnvioRedis: 1,
-            id_fact: id_fact,
-            numfact: numfact,
+            id_fact: id_fact ?? null,
+            numfact: numfact ?? null,
             id_doc: id_doc,
             codtipdoc: "NC",
             estado: "ENVIADO",
@@ -326,12 +330,12 @@ export async function postCrearNCParcialService(
         }
 
         //
-        const estado = result.rows[0].estado?.trim();
-        const observacion = result.rows[0].observacion?.trim();
-        const numControl = result.rows[0]?.num_control?.trim();
+        const estado = result.rows[0].estado?.trim() ?? "";
+        const observacion = result.rows[0].observacion?.trim() ?? "";
+        const numControl = result.rows[0]?.num_control?.trim() ?? "";
         id_fact = result.rows[0]?.id_fact;
         numfact = Number(result.rows[0]?.numfact);
-        prm_coddoc = result.rows[0]?.coddoc;
+        prm_coddoc = result.rows[0]?.coddoc?.trim() ?? "";
 
         // 👇 PASO 4. Verifico el estado del documento (NOTA DE CREDITO).
         if (estado?.toUpperCase() === "RECHAZADO") {
@@ -361,7 +365,7 @@ export async function postCrearNCParcialService(
         if (!facturaEnviada) {
             throw new AppError(
                 `El número de factura ${numfact} asociada a la Nota de Crédito Parcial ${prm_coddoc}, no ha sido enviada a la imprenta digital.`,
-                401,
+                409,
                 "service:postCrearNCParcialService",
             );
         }
@@ -372,9 +376,9 @@ export async function postCrearNCParcialService(
         // Datos del detalle
         const detalleNC: INotaCreditoDetPayload[] = result.rows.map((row) => {
             return {
-                codigo: row.coddetalle.trim(),
+                codigo: row.coddetalle?.trim() ?? "",
                 cantidad: Number(row.cantidad_detdoc),
-                descripcion: row.descripcion.trim(),
+                descripcion: row.descripcion?.trim() ?? "",
             };
         });
 
@@ -383,9 +387,9 @@ export async function postCrearNCParcialService(
 
         // 👇 PASO 7. Construir objeto para enviarlo a la api externa
         const payLoad = {
-            numeroFactura: encNC.numfact.trim(), // Número de factura a afectar
-            numeroNotaCredito: encNC.coddoc.trim(), // Número de nota de crédito a crear
-            descripcion: encNC.motivo?.trim(), // Descripcion del motivo de la nota de crédito a crear
+            numeroFactura: encNC.numfact?.trim() ?? "", // Número de factura a afectar
+            numeroNotaCredito: encNC.coddoc?.trim() ?? "", // Número de nota de crédito a crear
+            descripcion: encNC.motivo?.trim() ?? "", // Descripcion del motivo de la nota de crédito a crear
             productos: detalleNC,
         };
 
@@ -401,7 +405,11 @@ export async function postCrearNCParcialService(
         const datosResp = response?.data;
 
         // Validamos que sea un objeto plano válido
-        if (!datosResp || typeof datosResp !== "object") {
+        if (
+            !datosResp ||
+            typeof datosResp !== "object" ||
+            Array.isArray(datosResp)
+        ) {
             throw new AppError(
                 `El proveedor devolvió una estructura de respuesta inválida para la nota de credirto parcial ${prm_coddoc}.`,
                 502,
@@ -421,8 +429,8 @@ export async function postCrearNCParcialService(
             // 👇 PASO 8.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
                 estatusEnvioRedis: 0,
-                id_fact: id_fact,
-                numfact: numfact,
+                id_fact: id_fact ?? null,
+                numfact: numfact ?? null,
                 id_doc: id_doc,
                 codtipdoc: "NC-PARCIAL",
                 estado: "RECHAZADO",
@@ -478,8 +486,8 @@ export async function postCrearNCParcialService(
         // 👇 PASO 9. REDIS. Actualiza la clave del documento en Redis (ENVIADO)
         await func.actualizarKeyRedis(documento, {
             estatusEnvioRedis: 1,
-            id_fact: id_fact,
-            numfact: numfact,
+            id_fact: id_fact ?? null,
+            numfact: numfact ?? null,
             id_doc: id_doc,
             codtipdoc: "NC-PARCIAL",
             estado: "ENVIADO",
