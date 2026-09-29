@@ -14,22 +14,30 @@ export async function postCargarDocumentosEnviadosService(codigo_usuario: string
         const invoicesList = response.data.invoices.flat(); 
 
         // 3. ✅ - Mapeamos la lista a un arreglo de objetos con los campos formateados
-        const payload = invoicesList.map((item: any) => ({
-            numfact: item.document.trim() === 'FACTURA' ? Number(item.invoice_number) : null,
-            coddoc: item.document.trim() === 'FACTURA' ? null : item.invoice_number.trim(),
-            codtipdoc: item.document.trim() === 'FACTURA' ? item.document.trim() : 'NC',
-            num_control: item.control_number.trim(),
-            url_pdf: item.invoice_pdf.trim(),
-            fecreg: item.created,
-            codusu: codigo_usuario
-        }));
+        const payload = invoicesList
+            .filter((item: any) => item.status?.toLowerCase().trim() === 'emitida')
+            .map((item: any) => {
+                const isFactura = item.document?.toUpperCase().trim() === 'FACTURA';
+
+                return {
+                    numfact: isFactura ? Number(item.invoice_number) : null,
+                    coddoc: isFactura ? null : item.invoice_number?.trim(),
+                    codtipdoc: isFactura ? item.document?.toUpperCase().trim() : 'NC',
+                    num_control: item.control_number?.trim(),
+                    url_pdf: item.invoice_pdf?.trim(),
+                    fecreg: item.created,
+                    codusu: codigo_usuario,
+                    estado: 'ENVIADO',
+                    observacion: isFactura ? 'Factura enviada satisfactoriamente' : 'Nota de Crédito enviada satisfactoriamente'
+                };
+            });
 
         // 4. ✅ - Ejecutamos la función enviando todo el lote en un solo parámetro JSONB
         const query = 'SELECT fn_api_contingencia_documentos_fiscales_enviados($1::jsonb)';
         await poolSigesp.query(query, [JSON.stringify(payload)]);
-
-        return;
         
+
+        return;        
     } catch (error: any) {
         if (error instanceof AppError) {
             throw error; // ✅ ya tiene statusCode y location
@@ -80,6 +88,92 @@ export async function postCargarCodigosRetencionIslrService(codigo_usuario: stri
 }
 
 // ! NO APLICA: 17-09-2026
+// export async function postCargaRetencionesIslrService(codigo_usuario: string): Promise<void> {
+//     try {
+//         // 1. ✅ - EJECUTAMOS LA PETICIÓN LIMPIA
+//         // Nota como no le pasamos headers, ni baseURL, ni Authorization.
+//         // El interceptor hace todo eso antes de salir de tu backend.
+//         const response = await apiExternaClient.get('/api/Invoice/get_retention_islr');
+
+//         // 2. ✅ - Aplanamos la matriz por si viene como [[{...}, {...}]]
+//         const retentionsList = response.data.retention.flat(); 
+
+//     //     // 3. ✅ - Mapeamos la lista a un arreglo de objetos con los campos formateados
+//     //     const payload = retentionsList
+//     //         .filter((item: any) => item.status?.toLowerCase().trim() === 'emitida')
+//     //         .map((item: any) => {
+//     //             const isFactura = item.document?.toUpperCase().trim() === 'FACTURA';
+
+//     //             return {
+//     //                 numfact: isFactura ? Number(item.invoice_number) : null,
+//     //                 coddoc: isFactura ? null : item.invoice_number?.trim(),
+//     //                 codtipdoc: isFactura ? item.document?.toUpperCase().trim() : 'NC',
+//     //                 num_control: item.control_number?.trim(),
+//     //                 url_pdf: item.invoice_pdf?.trim(),
+//     //                 fecreg: item.created,
+//     //                 codusu: codigo_usuario,
+//     //                 estado: 'ENVIADO',
+//     //                 observacion: isFactura ? 'Factura enviada satisfactoriamente' : 'Nota de Crédito enviada satisfactoriamente'
+//     //             };
+//     //         });
+
+//     //         /*
+//     //         id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
+// 	// numcom bpchar(15) NOT NULL,
+// 	// numsol bpchar(15) NOT NULL,
+// 	// codtipdoc varchar(10) NOT NULL,
+// 	// estado varchar(20) NOT NULL,
+// 	// num_control varchar(25) NULL,
+// 	// url_pdf text NULL,
+// 	// observacion text NOT NULL,
+// 	// fecreg timestamptz DEFAULT now() NOT NULL,
+// 	// codusu bpchar(30) NOT NULL,
+// 	// api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
+// 	// api_id_origen int4 NULL,
+//     //         */
+
+//     //     // 4. ✅ - Ejecutamos la función enviando todo el lote en un solo parámetro JSONB
+//     //     const query = 'SELECT fn_api_contingencia_documentos_fiscales_enviados($1::jsonb)';
+//     //     await poolSigesp.query(query, [JSON.stringify(payload)]);
+        
+
+//         return retentionsList;
+
+//     } catch (error: any) {
+//         if (error instanceof AppError) {
+//             throw error; // ✅ ya tiene statusCode y location
+//         }
+
+//         if (error?.response?.data) {
+//             throw new AppError(error.response.data.message.trim(), error.response.status, "service:postCargaRetencionesIslrService");    
+//         }
+
+//         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCargaRetencionesIslrService");
+//     }
+// }
+
+// ! NO APLICA: 17-09-2026
+// export async function postCargaRetencionesIvaService(codigo_usuario: string): Promise<void> {
+//     try {
+//         //
+//         const response = await apiExternaClient.get<IRetencion[]>('/api/Invoice/get_retention_iva');
+
+//         return response.data;
+
+//     } catch (error: any) {
+//         if (error instanceof AppError) {
+//             throw error; // ✅ ya tiene statusCode y location
+//         }
+
+//         if (error?.response?.data) {
+//             throw new AppError(error.response.data.message.trim(), error.response.status, "service:getRetencionesIvaService");
+//         }
+
+//         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:getRetencionesIvaService");
+//     }
+// }
+
+// ! NO APLICA: 17-09-2026
 // export async function postTasaDolaroficialService(): Promise<void> {
 //     try {
 //         // Usamos axios global para no entrar en bucle
@@ -114,47 +208,3 @@ export async function postCargarCodigosRetencionIslrService(codigo_usuario: stri
 //         throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postTasaDolaroficialService");
 //     }
 // }
-
-/* 
-TODO: RESPALDO 
-export async function postCargarDocumentosEnviadosService(codigo_usuario: string): Promise<void> {
-    try {
-        // 1. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
-        // Nota como no le pasamos headers, ni baseURL, ni Authorization.
-        // El interceptor hace todo eso antes de salir de tu backend.
-        const response = await apiExternaClient.get('/api/Invoice/get_list_invoices');
-        
-        // 2. ✅  Aplanamos la matriz por si viene como [[{...}, {...}]]
-        const invoicesList = response.data.invoices.flat(); 
-
-        // 3. ✅  Recorremos cada documento recibido de la API
-        for (const item of invoicesList) {
-            // Extraemos los datos recibidos del endpoint
-            const prm_numfact = item.document.trim() === 'FACTURA' ? Number(item.invoice_number) : null;
-            const prm_coddoc = item.document.trim() === 'FACTURA' ? null : item.invoice_number.trim();
-            const prm_codtipdoc = item.document.trim() === 'FACTURA' ? item.document.trim() : 'NC';
-            const prm_num_control = item.control_number.trim();
-            const prm_url_pdf = item.invoice_pdf.trim();
-            const prm_fecreg = item.created;
-            const prm_codusu = codigo_usuario;
-
-            // 3. Ejecutamos el Stored Procedure / Función para cada registro
-            const query = 'SELECT * FROM fn_api_contingencia_documentos_fiscales_enviados($1, $2, $3, $4, $5, $6, $7)';
-            await poolSigesp.query(query, [prm_numfact, prm_coddoc, prm_codtipdoc, prm_num_control, prm_url_pdf, prm_fecreg, prm_codusu]);
-        }
-        
-        return;
-        
-    } catch (error: any) {
-        if (error instanceof AppError) {
-            throw error; // ✅ ya tiene statusCode y location
-        }
-
-        if (error?.response?.data) {
-            throw new AppError(error.response.data.message.trim(), error.response.status, "service:postCargarDocumentosEnviadosService");    
-        }
-
-        throw new AppError(error instanceof Error ? error.message.trim() : "Error desconocido", 500, "service:postCargarDocumentosEnviadosService");
-    }
-}
-*/

@@ -40,37 +40,3 @@ export async function postAgregarRetencionIvaController(
         pagination: null,
     });
 }
-
-// ! NO APLICA: 17-09-2026
-// export async function getRetencionesIslrController(
-//     req: Request,
-//     res: Response,
-//     next: NextFunction,
-// ): Promise<void> {
-//     const results = await serv.getRetencionesIslrService();
-
-//     res.status(200).json({
-//         error: false,
-//         status: 200,
-//         message: "Ok",
-//         data: results,
-//         pagination: null,
-//     });
-// }
-
-// ! NO APLICA: 17-09-2026
-// export async function getRetencionesIvaController(
-//     req: Request,
-//     res: Response,
-//     next: NextFunction,
-// ): Promise<void> {
-//     const results = await serv.getRetencionesIvaService();
-
-//     res.status(200).json({
-//         error: false,
-//         status: 200,
-//         message: "Ok",
-//         data: results,
-//         pagination: null,
-//     });
-// }

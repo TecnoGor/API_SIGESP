@@ -1,3 +1,63 @@
+-- DROP FUNCTION public.fn_actualiza_tasa(float8, timestamp, float8, timestamp);
+
+CREATE OR REPLACE FUNCTION public.fn_actualiza_tasa(prm_tasa_dolar double precision, prm_fecha_cambio_dolar timestamp without time zone, prm_tasa_euro double precision, prm_fecha_cambio_euro timestamp without time zone)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+	DECLARE 		
+		v_ahora timestamp(0) := LOCALTIMESTAMP(0);
+	BEGIN
+
+		WITH datos_nuevos (nombre, valor_nuevo, fecha_cambio) AS (
+	        VALUES 
+	            ('BCV DOLAR'::varchar, prm_tasa_dolar::float8, prm_fecha_cambio_dolar),
+	            ('IposPlus'::varchar, prm_tasa_dolar::float8, prm_fecha_cambio_dolar),
+	            ('BCV EURO'::varchar, prm_tasa_euro::float8, prm_fecha_cambio_euro)
+	    ),
+	    -- 1. Capturamos valor previo, valor nuevo y su fecha de cambio correspondiente
+	    parametros_previos AS (
+	        SELECT	p.parametro_id,
+	            	p.valor AS valor_anterior,
+	            	dn.valor_nuevo,
+					dn.fecha_cambio
+	        FROM 	public.parametro p
+	        JOIN 	datos_nuevos dn ON TRIM(p.nombre) = TRIM(dn.nombre)
+	        WHERE 	p.activo = true
+	        FOR UPDATE OF p
+	    ),
+	    -- 2. Actualizamos la tabla principal
+	    actualizacion AS (
+	        UPDATE 	public.parametro p
+	        SET 	valor = pp.valor_nuevo,
+					fecha_cambio = pp.fecha_cambio,
+	            	updated_at = v_ahora
+	        FROM 	parametros_previos pp
+	        WHERE 	p.parametro_id = pp.parametro_id
+	    )
+	    -- 3. Insertamos SIEMPRE en el histórico (así el valor no cambie)
+	    INSERT INTO public.parametros_historicos (
+	        parametro_id,
+	        valor_anterior,
+	        valor_nuevo,
+	        usuario_id,
+	        fecha_cambio,
+	        created_at,
+	        updated_at
+	    )
+	    SELECT 
+	        pp.parametro_id,
+	        pp.valor_anterior,
+	        pp.valor_nuevo,
+	        1,
+	        pp.fecha_cambio,
+	        v_ahora,
+	        v_ahora
+	    FROM 
+			parametros_previos pp;
+	END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_contingencia_codigos_retenciones_islr(jsonb);
 
 CREATE OR REPLACE FUNCTION public.fn_api_contingencia_codigos_retenciones_islr(prm_codigos jsonb)
@@ -30,6 +90,115 @@ END;
 $function$
 ;
 
+-- DROP FUNCTION public.fn_api_contingencia_comprobantes_retenciones_enviados(jsonb);
+
+CREATE OR REPLACE FUNCTION public.fn_api_contingencia_comprobantes_retenciones_enviados(prm_documentos jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+	-- -------------------------------------------------------------------------
+	-- 1. LIMPIA LA BASE DE DATOS
+	-- -------------------------------------------------------------------------
+	TRUNCATE TABLE api_integracion_documentos_fiscales;
+
+	-- -------------------------------------------------------------------------
+	-- 2. INSERCIÓN MASIVA DE FACTURAS
+	-- -------------------------------------------------------------------------
+	INSERT INTO api_integracion_documentos_fiscales (
+        id_fact, 
+        numfact, 
+        id_doc, 
+        codtipdoc, 
+		estado,
+        num_control, 
+        url_pdf, 
+		observacion,
+        fecreg, 
+        codusu, 
+        api_modulo, 
+        api_id_origen
+    )
+    SELECT 
+        f.id_fact,
+        j.numfact,
+        NULL,
+        UPPER(TRIM(j.codtipdoc)),
+		UPPER(TRIM(j.estado)),
+        TRIM(j.num_control),
+        TRIM(j.url_pdf),
+		TRIM(j.observacion),
+        j.fecreg,
+        TRIM(j.codusu),
+        UPPER(TRIM(COALESCE(NULLIF(f.api_modulo, ''), 'SIGESP'))),
+        f.api_id_fact_origen
+    FROM jsonb_to_recordset(prm_documentos) AS j(
+        numfact integer,
+        coddoc varchar,
+        codtipdoc varchar,
+        num_control varchar,
+        url_pdf text,
+        fecreg timestamp,
+        codusu varchar,
+		estado varchar,
+		observacion text
+    )
+    INNER JOIN cxc_factura f ON f.numfact = j.numfact
+    WHERE UPPER(TRIM(j.codtipdoc)) = 'FACTURA'
+    ON CONFLICT (id_fact, codtipdoc, numfact) WHERE codtipdoc = 'FACTURA'
+    DO NOTHING;
+
+	-- -------------------------------------------------------------------------
+	-- 3. INSERCIÓN MASIVA DE NOTAS DE CRÉDITO (NC)
+	-- -------------------------------------------------------------------------
+    INSERT INTO api_integracion_documentos_fiscales (
+        id_fact, 
+        numfact, 
+        id_doc, 
+        codtipdoc, 
+		estado,
+        num_control, 
+        url_pdf, 
+		observacion,
+        fecreg, 
+        codusu, 
+        api_modulo, 
+        api_id_origen
+    )
+    SELECT 
+        d.id_fact,
+        f.numfact,
+        d.id_doc,
+        UPPER(TRIM(j.codtipdoc)),
+		UPPER(TRIM(j.estado)),
+        TRIM(j.num_control),
+        TRIM(j.url_pdf),
+		TRIM(j.observacion),
+        j.fecreg,
+        TRIM(j.codusu),
+        UPPER(TRIM(COALESCE(NULLIF(d.api_modulo, ''), 'SIGESP'))),
+        d.api_id_doc_origen
+    FROM jsonb_to_recordset(prm_documentos) AS j(
+        numfact integer,
+        coddoc varchar,
+        codtipdoc varchar,
+        num_control varchar,
+        url_pdf text,
+        fecreg timestamp,
+        codusu varchar,
+		estado varchar,
+		observacion text
+    )
+    INNER JOIN cxc_documento d ON d.coddoc = j.coddoc
+    INNER JOIN cxc_factura f ON d.id_fact = f.id_fact
+    WHERE UPPER(TRIM(j.codtipdoc)) <> 'FACTURA'
+    ON CONFLICT (id_fact, codtipdoc, id_doc) WHERE codtipdoc = 'NC'
+    DO NOTHING;
+
+END;
+$function$
+;
+
 -- DROP FUNCTION public.fn_api_contingencia_documentos_fiscales_enviados(jsonb);
 
 CREATE OR REPLACE FUNCTION public.fn_api_contingencia_documentos_fiscales_enviados(prm_documentos jsonb)
@@ -45,13 +214,15 @@ BEGIN
 	-- -------------------------------------------------------------------------
 	-- 2. INSERCIÓN MASIVA DE FACTURAS
 	-- -------------------------------------------------------------------------
-    INSERT INTO api_integracion_documentos_fiscales (
+	INSERT INTO api_integracion_documentos_fiscales (
         id_fact, 
         numfact, 
         id_doc, 
         codtipdoc, 
+		estado,
         num_control, 
         url_pdf, 
+		observacion,
         fecreg, 
         codusu, 
         api_modulo, 
@@ -62,8 +233,10 @@ BEGIN
         j.numfact,
         NULL,
         UPPER(TRIM(j.codtipdoc)),
+		UPPER(TRIM(j.estado)),
         TRIM(j.num_control),
         TRIM(j.url_pdf),
+		TRIM(j.observacion),
         j.fecreg,
         TRIM(j.codusu),
         UPPER(TRIM(COALESCE(NULLIF(f.api_modulo, ''), 'SIGESP'))),
@@ -75,7 +248,9 @@ BEGIN
         num_control varchar,
         url_pdf text,
         fecreg timestamp,
-        codusu varchar
+        codusu varchar,
+		estado varchar,
+		observacion text
     )
     INNER JOIN cxc_factura f ON f.numfact = j.numfact
     WHERE UPPER(TRIM(j.codtipdoc)) = 'FACTURA'
@@ -90,8 +265,10 @@ BEGIN
         numfact, 
         id_doc, 
         codtipdoc, 
+		estado,
         num_control, 
         url_pdf, 
+		observacion,
         fecreg, 
         codusu, 
         api_modulo, 
@@ -102,8 +279,10 @@ BEGIN
         f.numfact,
         d.id_doc,
         UPPER(TRIM(j.codtipdoc)),
+		UPPER(TRIM(j.estado)),
         TRIM(j.num_control),
         TRIM(j.url_pdf),
+		TRIM(j.observacion),
         j.fecreg,
         TRIM(j.codusu),
         UPPER(TRIM(COALESCE(NULLIF(d.api_modulo, ''), 'SIGESP'))),
@@ -115,7 +294,9 @@ BEGIN
         num_control varchar,
         url_pdf text,
         fecreg timestamp,
-        codusu varchar
+        codusu varchar,
+		estado varchar,
+		observacion text
     )
     INNER JOIN cxc_documento d ON d.coddoc = j.coddoc
     INNER JOIN cxc_factura f ON d.id_fact = f.id_fact

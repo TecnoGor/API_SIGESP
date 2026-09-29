@@ -9,13 +9,13 @@ export async function postCargarDocumentosEnviadosController(
 ): Promise<void> {
     const { codigo_usuario } = req.body;
 
-    const result = await serv.postCargarDocumentosEnviadosService(codigo_usuario);
+    await serv.postCargarDocumentosEnviadosService(codigo_usuario);
 
     res.status(201).json({
         error: false,
         status: 201,
         message: "Se cargaron los documentos fiscales correctamente",
-        data: result,
+        data: null,
         pagination: null,
     });
 }
@@ -28,16 +28,54 @@ export async function postCargarCodigosRetencionIslrController(
 ): Promise<void> {
     const { codigo_usuario } = req.body;
 
-    const result = await serv.postCargarCodigosRetencionIslrService(codigo_usuario);
+    await serv.postCargarCodigosRetencionIslrService(codigo_usuario);
 
     res.status(201).json({
         error: false,
         status: 201,
         message: "Se cargaron los codigos de retencion de islr correctamente",
-        data: result,
+        data: null,
         pagination: null,
     });
 }
+
+// ! NO APLICA: 17-09-2026
+// export async function postCargaRetencionesIslrController(
+//     req: Request,
+//     res: Response,
+//     next: NextFunction,
+// ): Promise<void> {
+//     const { codigo_usuario } = req.body;
+
+//     const xxx = await serv.postCargaRetencionesIslrService(codigo_usuario);
+
+//     res.status(200).json({
+//         error: false,
+//         status: 201,
+//         message: "Se cargaron las retenciones del islr correctamente",
+//         data: xxx,
+//         pagination: null,
+//     });
+// }
+
+// ! NO APLICA: 17-09-2026
+// export async function postCargaRetencionesIvaController(
+//     req: Request,
+//     res: Response,
+//     next: NextFunction,
+// ): Promise<void> {
+//     const { codigo_usuario } = req.body;
+
+//     await serv.postCargaRetencionesIvaService(codigo_usuario);
+
+//     res.status(200).json({
+//         error: false,
+//         status: 201,
+//         message: "Se cargaron las retenciones del iva correctamente",
+//         data: null,
+//         pagination: null,
+//     });
+// }
 
 // ! NO APLICA: 17-09-2026
 // export async function postTasaDolaroficialController(

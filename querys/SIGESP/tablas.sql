@@ -9,9 +9,6 @@ CREATE TABLE public.api_integracion_codigos_ret_islr (
 	codigo varchar(20) NOT NULL,
 	concepto_de_retencion varchar(254) NOT NULL,
 	cmp_codret varchar(10) NULL,
-	CONSTRAINT api_integracion_codigos_ret_islr_codigo_not_null NOT NULL codigo,
-	CONSTRAINT api_integracion_codigos_ret_islr_concepto_de_retencion_not_null NOT NULL concepto_de_retencion,
-	CONSTRAINT api_integracion_codigos_ret_islr_id_not_null NOT NULL id,
 	CONSTRAINT pk_api_integracion_codigos_ret_islr PRIMARY KEY (id),
 	CONSTRAINT unq_api_codigos_ret_cmp_codret UNIQUE (cmp_codret),
 	CONSTRAINT unq_api_codigos_ret_codigo UNIQUE (codigo)
@@ -38,15 +35,6 @@ CREATE TABLE public.api_integracion_documentos_fiscales (
 	codusu bpchar(30) NOT NULL,
 	api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
 	api_id_origen int4 NULL,
-	CONSTRAINT api_integracion_documentos_fiscales_api_modulo_not_null NOT NULL api_modulo,
-	CONSTRAINT api_integracion_documentos_fiscales_codtipdoc_not_null NOT NULL codtipdoc,
-	CONSTRAINT api_integracion_documentos_fiscales_codusu_not_null NOT NULL codusu,
-	CONSTRAINT api_integracion_documentos_fiscales_estado_not_null NOT NULL estado,
-	CONSTRAINT api_integracion_documentos_fiscales_fecreg_not_null NOT NULL fecreg,
-	CONSTRAINT api_integracion_documentos_fiscales_id_fact_not_null NOT NULL id_fact,
-	CONSTRAINT api_integracion_documentos_fiscales_id_not_null NOT NULL id,
-	CONSTRAINT api_integracion_documentos_fiscales_numfact_not_null NOT NULL numfact,
-	CONSTRAINT api_integracion_documentos_fiscales_observacion_not_null NOT NULL observacion,
 	CONSTRAINT chk_api_integracion_documentos_fiscales_estado CHECK (((estado)::text = ANY (ARRAY[('ENVIADO'::character varying)::text, ('RECHAZADO'::character varying)::text, ('ERROR'::character varying)::text]))),
 	CONSTRAINT pk_api_integracion_documentos_fiscales PRIMARY KEY (id)
 );
@@ -73,15 +61,6 @@ CREATE TABLE public.api_integracion_documentos_retenciones (
 	codusu bpchar(30) NOT NULL,
 	api_modulo varchar DEFAULT 'SIGESP'::character varying NOT NULL,
 	api_id_origen int4 NULL,
-	CONSTRAINT api_integracion_documentos_retenciones_api_modulo_not_null NOT NULL api_modulo,
-	CONSTRAINT api_integracion_documentos_retenciones_codtipdoc_not_null NOT NULL codtipdoc,
-	CONSTRAINT api_integracion_documentos_retenciones_codusu_not_null NOT NULL codusu,
-	CONSTRAINT api_integracion_documentos_retenciones_estado_not_null NOT NULL estado,
-	CONSTRAINT api_integracion_documentos_retenciones_fecreg_not_null NOT NULL fecreg,
-	CONSTRAINT api_integracion_documentos_retenciones_id_not_null NOT NULL id,
-	CONSTRAINT api_integracion_documentos_retenciones_numcom_not_null NOT NULL numcom,
-	CONSTRAINT api_integracion_documentos_retenciones_numsol_not_null NOT NULL numsol,
-	CONSTRAINT api_integracion_documentos_retenciones_observacion_not_null NOT NULL observacion,
 	CONSTRAINT chk_api_integracion_documentos_retenciones_estado CHECK (((estado)::text = ANY (ARRAY[('ENVIADO'::character varying)::text, ('RECHAZADO'::character varying)::text, ('ERROR'::character varying)::text]))),
 	CONSTRAINT pk_api_integracion_documentos_retenciones PRIMARY KEY (id)
 );
@@ -100,13 +79,7 @@ CREATE TABLE public.api_integracion_parametros (
 	cuenta_ingreso varchar(25) NOT NULL,
 	cuenta_x_pagar_iva varchar(25) NOT NULL,
 	cuenta_partida_ingreso varchar(25) NOT NULL,
-	cantidad_doc_ret int4 DEFAULT 0 NOT NULL,
-	CONSTRAINT api_integracion_parametros_cantidad_doc_ret_not_null NOT NULL cantidad_doc_ret,
-	CONSTRAINT api_integracion_parametros_codcar_not_null NOT NULL codcar,
-	CONSTRAINT api_integracion_parametros_cuenta_ingreso_not_null NOT NULL cuenta_ingreso,
-	CONSTRAINT api_integracion_parametros_cuenta_partida_ingreso_not_null NOT NULL cuenta_partida_ingreso,
-	CONSTRAINT api_integracion_parametros_cuenta_x_cobrar_not_null NOT NULL cuenta_x_cobrar,
-	CONSTRAINT api_integracion_parametros_cuenta_x_pagar_iva_not_null NOT NULL cuenta_x_pagar_iva
+	cantidad_doc_ret int4 DEFAULT 0 NOT NULL
 );
 
 
@@ -121,9 +94,5 @@ CREATE TABLE public.api_integracion_servicios (
 	coddetalle varchar(20) NOT NULL,
 	nombre varchar(254) NOT NULL,
 	codunimed varchar(4) NOT NULL,
-	CONSTRAINT api_integracion_servicios_coddetalle_not_null NOT NULL coddetalle,
-	CONSTRAINT api_integracion_servicios_codunimed_not_null NOT NULL codunimed,
-	CONSTRAINT api_integracion_servicios_nombre_not_null NOT NULL nombre,
-	CONSTRAINT api_integracion_servicios_servicio_id_not_null NOT NULL servicio_id,
 	CONSTRAINT pk_api_integracion_servicios PRIMARY KEY (servicio_id, coddetalle, nombre, codunimed)
 );
