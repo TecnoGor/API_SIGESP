@@ -1,63 +1,3 @@
--- DROP FUNCTION public.fn_actualiza_tasa(float8, timestamp, float8, timestamp);
-
-CREATE OR REPLACE FUNCTION public.fn_actualiza_tasa(prm_tasa_dolar double precision, prm_fecha_cambio_dolar timestamp without time zone, prm_tasa_euro double precision, prm_fecha_cambio_euro timestamp without time zone)
- RETURNS void
- LANGUAGE plpgsql
-AS $function$
-	DECLARE 		
-		v_ahora timestamp(0) := LOCALTIMESTAMP(0);
-	BEGIN
-
-		WITH datos_nuevos (nombre, valor_nuevo, fecha_cambio) AS (
-	        VALUES 
-	            ('BCV DOLAR'::varchar, prm_tasa_dolar::float8, prm_fecha_cambio_dolar),
-	            ('IposPlus'::varchar, prm_tasa_dolar::float8, prm_fecha_cambio_dolar),
-	            ('BCV EURO'::varchar, prm_tasa_euro::float8, prm_fecha_cambio_euro)
-	    ),
-	    -- 1. Capturamos valor previo, valor nuevo y su fecha de cambio correspondiente
-	    parametros_previos AS (
-	        SELECT	p.parametro_id,
-	            	p.valor AS valor_anterior,
-	            	dn.valor_nuevo,
-					dn.fecha_cambio
-	        FROM 	public.parametro p
-	        JOIN 	datos_nuevos dn ON TRIM(p.nombre) = TRIM(dn.nombre)
-	        WHERE 	p.activo = true
-	        FOR UPDATE OF p
-	    ),
-	    -- 2. Actualizamos la tabla principal
-	    actualizacion AS (
-	        UPDATE 	public.parametro p
-	        SET 	valor = pp.valor_nuevo,
-					fecha_cambio = pp.fecha_cambio,
-	            	updated_at = v_ahora
-	        FROM 	parametros_previos pp
-	        WHERE 	p.parametro_id = pp.parametro_id
-	    )
-	    -- 3. Insertamos SIEMPRE en el histórico (así el valor no cambie)
-	    INSERT INTO public.parametros_historicos (
-	        parametro_id,
-	        valor_anterior,
-	        valor_nuevo,
-	        usuario_id,
-	        fecha_cambio,
-	        created_at,
-	        updated_at
-	    )
-	    SELECT 
-	        pp.parametro_id,
-	        pp.valor_anterior,
-	        pp.valor_nuevo,
-	        1,
-	        pp.fecha_cambio,
-	        v_ahora,
-	        v_ahora
-	    FROM 
-			parametros_previos pp;
-	END;
-$function$
-;
-
 -- DROP FUNCTION public.fn_api_contingencia_codigos_retenciones_islr(jsonb);
 
 CREATE OR REPLACE FUNCTION public.fn_api_contingencia_codigos_retenciones_islr(prm_codigos jsonb)
@@ -1030,6 +970,103 @@ AS $function$
 	
 	    RETURN v_filas_afectadas;
 	END;
+$function$
+;
+
+-- DROP FUNCTION public.fn_api_post_integracion_documentos_lote(jsonb);
+
+CREATE OR REPLACE FUNCTION public.fn_api_post_integracion_documentos_lote(p_documentos jsonb)
+ RETURNS void
+ LANGUAGE plpgsql
+AS $function$
+begin
+	-- CTE: Deserializa y estandariza el arreglo JSONB en una estructura tabular temporal
+    WITH datos AS (
+    	SELECT 
+            (x.elem->>'id_fact')::int4 AS id_fact,
+            (x.elem->>'numfact')::int4 AS numfact,
+            (x.elem->>'id_doc')::int4 AS id_doc,
+            TRIM(x.elem->>'numcom') AS numcom,
+            TRIM(x.elem->>'numsol') AS numsol,
+            UPPER(TRIM(x.elem->>'codtipdoc')) AS codtipdoc,
+            UPPER(TRIM(x.elem->>'estado')) AS estado,
+            x.elem->>'num_control' AS num_control,
+            x.elem->>'url_pdf' AS url_pdf,
+            COALESCE(TRIM(x.elem->>'observacion'), '') AS observacion,
+            COALESCE(UPPER(TRIM(x.elem->>'codusu')), 'SYSTEM') AS codusu,
+            COALESCE(UPPER(TRIM(x.elem->>'api_modulo')), 'SIGESP') AS api_modulo,
+            (x.elem->>'api_id_origen')::int4 AS api_id_origen
+        FROM jsonb_array_elements(p_documentos) AS x(elem)
+		-- SALVAGUARDA: Solo procesa ENVIADO (1) y RECHAZADO (0). Ignora ERROR (-1).
+        WHERE UPPER(TRIM(x.elem->>'estado')) IN ('ENVIADO', 'RECHAZADO') OR (x.elem->>'estatusEnvioRedis')::int4 IN (0, 1)
+    ),
+    
+    -- 1. Inserción / Actualización de FACTURAS (Tabla: api_integracion_documentos_fiscales)
+    ins_facturas AS (
+        INSERT INTO public.api_integracion_documentos_fiscales (
+            id_fact, numfact, id_doc, codtipdoc, estado, num_control, url_pdf, observacion, codusu, api_modulo, api_id_origen 
+        )
+		SELECT	d.id_fact, d.numfact, d.id_doc, d.codtipdoc, d.estado, d.num_control, d.url_pdf, d.observacion, d.codusu, d.api_modulo, d.api_id_origen
+        FROM 	datos d
+        WHERE 	d.codtipdoc = 'FACTURA'
+        ON CONFLICT (id_fact, codtipdoc, numfact) WHERE ((codtipdoc)::text = 'FACTURA'::text)
+        DO UPDATE SET
+			estado = EXCLUDED.estado,
+            num_control = COALESCE(EXCLUDED.num_control, public.api_integracion_documentos_fiscales.num_control),
+            url_pdf = COALESCE(EXCLUDED.url_pdf, public.api_integracion_documentos_fiscales.url_pdf),
+            observacion = EXCLUDED.observacion,
+            fecreg = NOW(),
+            codusu = EXCLUDED.codusu,
+            api_modulo = EXCLUDED.api_modulo,
+            api_id_origen = EXCLUDED.api_id_origen
+        -- PROTECCIÓN: Si en BD ya está 'ENVIADO', solo permite actualizar si la nueva carga también es 'ENVIADO'
+        WHERE public.api_integracion_documentos_fiscales.estado != 'ENVIADO' 
+           OR EXCLUDED.estado = 'ENVIADO'
+    ),
+
+    -- 2. Inserción / Actualización de NOTAS DE CRÉDITO (Tabla: api_integracion_documentos_fiscales)
+    ins_notas_credito AS (
+        INSERT INTO public.api_integracion_documentos_fiscales (
+            id_fact, numfact, id_doc, codtipdoc, estado, num_control, url_pdf, observacion, codusu, api_modulo, api_id_origen
+        )
+        SELECT	d.id_fact, d.numfact, d.id_doc, d.codtipdoc, d.estado, d.num_control, d.url_pdf, d.observacion, d.codusu, d.api_modulo, d.api_id_origen
+        FROM 	datos d
+        WHERE 	d.codtipdoc = 'NC'
+        ON CONFLICT (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text)
+        DO UPDATE SET
+            estado = EXCLUDED.estado,
+            num_control = COALESCE(EXCLUDED.num_control, public.api_integracion_documentos_fiscales.num_control),
+            url_pdf = COALESCE(EXCLUDED.url_pdf, public.api_integracion_documentos_fiscales.url_pdf),
+            observacion = EXCLUDED.observacion,
+            fecreg = NOW(),
+            codusu = EXCLUDED.codusu,
+            api_modulo = EXCLUDED.api_modulo,
+            api_id_origen = EXCLUDED.api_id_origen
+        WHERE public.api_integracion_documentos_fiscales.estado != 'ENVIADO' 
+           OR EXCLUDED.estado = 'ENVIADO'
+    )
+
+    -- 3. Inserción / Actualización de RETENCIONES (Tabla: api_integracion_documentos_retenciones)
+    INSERT INTO public.api_integracion_documentos_retenciones (
+        numcom, numsol, codtipdoc, estado, num_control, url_pdf, observacion, codusu, api_modulo, api_id_origen
+    )
+    SELECT 	d.numcom, d.numsol, d.codtipdoc, d.estado, d.num_control, d.url_pdf, d.observacion, d.codusu, d.api_modulo, d.api_id_origen
+    FROM 	datos d
+    WHERE 	d.codtipdoc IN ('ISLR', 'IVA')
+    ON CONFLICT (numcom, numsol, codtipdoc)
+    DO UPDATE SET
+        estado = EXCLUDED.estado,
+        num_control = COALESCE(EXCLUDED.num_control, public.api_integracion_documentos_retenciones.num_control),
+        url_pdf = COALESCE(EXCLUDED.url_pdf, public.api_integracion_documentos_retenciones.url_pdf),
+        observacion = EXCLUDED.observacion,
+        fecreg = NOW(),
+        codusu = EXCLUDED.codusu,
+        api_modulo = EXCLUDED.api_modulo,
+        api_id_origen = EXCLUDED.api_id_origen
+    WHERE public.api_integracion_documentos_retenciones.estado != 'ENVIADO' 
+       OR EXCLUDED.estado = 'ENVIADO';
+
+END;
 $function$
 ;
 

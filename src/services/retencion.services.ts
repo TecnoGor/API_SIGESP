@@ -112,8 +112,7 @@ export async function postAgregarRetencionIsrlService(
                 {
                     cliente: [
                         {
-                            documentoIdentidadCliente:
-                                encabezadoRet.rif?.trim() ?? "",
+                            documentoIdentidadCliente: encabezadoRet.rif?.trim() ?? "",
                             nombreRazonSocialCliente:
                                 encabezadoRet.nomsujret?.trim() ?? "",
                             correoCliente: encabezadoRet.email?.trim() ?? "",
@@ -232,11 +231,13 @@ export async function postAgregarRetencionIsrlService(
     } catch (error: any) {
         // ✅ Por aquí entran los errores lanzados con throw new AppError. Ya tiene statusCode y location
         if (error instanceof AppError) {
+            console.log('ENTRO AQUI 1 ISLR')
             throw error;
         }
 
         // ✅ Por aquí entran los errores lanzados por la API externa (ej. 400)
         if (error?.response?.data) {
+            console.log('ENTRO AQUI 2 ISLR')
             const errorMessage = safeTrim(
                 error.response.data.message,
                 "Error en API externa",
@@ -263,6 +264,8 @@ export async function postAgregarRetencionIsrlService(
                 "service:postAgregarRetencionIsrlService",
             );
         }
+
+        console.log('ENTRO AQUI 3 ISLR')
 
         // ✅ Por aquí entran los errores 500 o no capturados
         const fallbackMessage = safeTrim(error?.message, "Error desconocido");
@@ -399,8 +402,7 @@ export async function postAgregarRetencionIvaService(
                 {
                     cliente: [
                         {
-                            documentoIdentidadCliente:
-                                encabezadoRet.rif?.trim() ?? "",
+                            documentoIdentidadCliente: null, //encabezadoRet.rif?.trim() ?? "",
                             nombreRazonSocialCliente:
                                 encabezadoRet.nomsujret?.trim() ?? "",
                             correoCliente: encabezadoRet.email?.trim() ?? "",
@@ -518,11 +520,14 @@ export async function postAgregarRetencionIvaService(
     } catch (error: any) {
         // ✅ Por aquí entran los errores lanzados con throw new AppError. Ya tiene statusCode y location
         if (error instanceof AppError) {
+            console.log('ENTRO AQUI 1 IVA')
             throw error;
         }
 
         // ✅ Por aquí entran los errores lanzados por la API externa (ej. 400)
         if (error?.response?.data) {
+            console.log('ENTRO AQUI 2 IVA')
+
             const errorMessage = safeTrim(
                 error.response.data.message,
                 "Error en API externa",
@@ -549,6 +554,8 @@ export async function postAgregarRetencionIvaService(
                 "service:postAgregarRetencionIvaService",
             );
         }
+
+        console.log('ENTRO AQUI 3 IVA')
 
         // ✅ Por aquí entran los errores 500 o no capturados
         const fallbackMessage = safeTrim(error?.message, "Error desconocido");
