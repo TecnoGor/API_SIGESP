@@ -8,14 +8,16 @@ export const poolSigesp = new Pool({
     host: process.env.APP_DB_SIGESP_HOST,
     database: process.env.APP_DB_SIGESP_DATABASE,
     password: process.env.APP_DB_SIGESP_PASSWORD,
-    port: parseInt((process.env.APP_DB_SIGESP_PORT as string) || "5432")
+    port: parseInt((process.env.APP_DB_SIGESP_PORT as string) || "5432"),
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
 });
 
-// TIP 2: Manejo de errores en conexiones inactivas (Idle)
-// Si la base de datos se cae MIENTRAS la app está corriendo, esto evita que Node haga crash.
+// Manejo de errores en conexiones inactivas (Idle)
+// Se registra el evento sin abortar el proceso; pg descarta el socket caído y reconecta en la siguiente petición.
 poolSigesp.on('error', (err, client) => {
-    console.error('❌ Error inesperado en un cliente inactivo de SISGESP PostgreSQL', err);
-    process.exit(-1);
+    console.error('⚠️ Error inesperado en un cliente inactivo de SISGESP PostgreSQL:', err.message);
 });
 
 export async function conexionSigespPostgresSql() {

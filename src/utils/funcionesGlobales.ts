@@ -54,9 +54,9 @@ export async function GeneraToken(
 // ? LISTA: 17-09-2026
 export async function Encriptar(cadena: string, location: string) {
     try {
-        const salt = await bcryptjs.genSaltSync(10);
+        const salt = await bcryptjs.genSalt(10);
 
-        return await bcryptjs.hashSync(cadena.toString(), salt);
+        return await bcryptjs.hash(cadena.toString(), salt);
     } catch (error: any) {
         if (error instanceof AppError) {
             throw error; // ✅ ya tiene statusCode y location

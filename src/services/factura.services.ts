@@ -153,6 +153,86 @@ export async function postAgregarService(
         if (erroresFactura.length > 0) {
             const errorMsg = `${msgProveedor} ${erroresFactura[0]}`;
 
+            // 🔄 PASO 7.1-A. DETECCIÓN DE FACTURA YA REGISTRADA (AUTO-RECUPERACIÓN)
+            const esFacturaYaRegistrada =
+                datosResp.success === true &&
+                msgProveedor.toLowerCase().includes("facturas ya registradas");
+
+            if (esFacturaYaRegistrada) {
+                try {
+                    // const numFacturaBuscar = encFactura.numfact?.trim() ?? "";
+                    const numFacturaBuscar =
+                        typeof erroresFactura[0] === "string" && erroresFactura[0].trim()
+                            ? erroresFactura[0].trim()
+                            : encFactura.numfact?.trim() ?? "";
+
+                    // Consulta GET para recuperar los datos fiscales de la imprenta
+                    const responseGet = await apiExternaClient.get(`/api/Invoice/get_list_invoices/`, 
+                        {
+                            params: { numeroDeFactura: numFacturaBuscar },
+                        }
+                    );
+
+                    const datosRespGet = responseGet?.data;
+
+                    // 🔍 Extracción segura contemplando la estructura anidada "invoices": [ [ { ... } ] ]
+                    let facturaRecuperada: any = null;
+
+                    if (
+                        datosRespGet?.success === true &&
+                        Array.isArray(datosRespGet?.invoices) &&
+                        Array.isArray(datosRespGet.invoices[0]) &&
+                        datosRespGet.invoices[0].length > 0
+                    ) {
+                        facturaRecuperada = datosRespGet.invoices[0][0];
+                    }
+
+                    
+                  const control_number_rec =
+                        typeof facturaRecuperada?.control_number === "string"
+                            ? facturaRecuperada.control_number.trim()
+                            : "";
+
+                    const invoice_pdf_rec =
+                        typeof facturaRecuperada?.invoice_pdf === "string"
+                            ? facturaRecuperada.invoice_pdf.trim()
+                            : "";
+                    
+                    // Si la imprenta devolvió exitosamente los datos fiscales de la factura existente
+                    if (control_number_rec && invoice_pdf_rec) {
+                        // ✅ REDIS: Se actualiza a ENVIADO con los datos recuperados
+                        await func.actualizarKeyRedis(documento, {
+                            estatusEnvioRedis: 1,
+                            id_fact: id_fact,
+                            numfact: prm_numfact,
+                            id_doc: null,
+                            codtipdoc: "FACTURA",
+                            estado: "ENVIADO",
+                            num_control: control_number_rec,
+                            url_pdf: invoice_pdf_rec,
+                            observacion:
+                                "Factura recuperada exitosamente (ya existía en la imprenta)",
+                            codusu: (codigo_usuario ?? "").trim(),
+                            api_modulo: "SIGESP",
+                            api_id_origen: null,
+                        });
+
+                        // Se retorna la estructura equivalente a un envío exitoso
+                        return {
+                            ...facturaRecuperada,
+                            control_number: control_number_rec,
+                            invoice_pdf: invoice_pdf_rec,
+                        };
+                    }
+                } catch (_errGet) {
+                    // Permite saber en logs que se intentó la recuperación pero falló la petición GET
+    console.warn(
+        `[postAgregarService] No se pudo auto-recuperar la factura ${prm_numfact} desde la imprenta:`,
+        _errGet
+    );
+                }
+            }
+
             // 👇 PASO 7.1. REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
                 estatusEnvioRedis: 0,

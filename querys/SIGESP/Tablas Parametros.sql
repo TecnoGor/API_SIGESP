@@ -6,13 +6,15 @@
 
 CREATE TABLE public.parametro (
 	parametro_id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
+	codigo_iso varchar(15) NOT NULL,
 	nombre varchar(255) NOT NULL,
 	valor float8 NOT NULL,
 	activo bool DEFAULT true NOT NULL,
 	fecha_cambio timestamp(0) NOT NULL,
 	created_at timestamp(0) NULL,
 	updated_at timestamp(0) NULL,
-	CONSTRAINT parametro_pkey PRIMARY KEY (parametro_id)
+	CONSTRAINT parametro_pkey PRIMARY KEY (parametro_id),
+	CONSTRAINT parametro_unique UNIQUE (codigo_iso)
 );
 
 

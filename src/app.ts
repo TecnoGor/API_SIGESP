@@ -15,13 +15,19 @@ const app = express();
 app.set("port", process.env.APP_PORT || 4000);
 
 // Middleware
+const isProd = process.env.NODE_ENV === "production";
+const allowedOrigins: string[] = [
+    process.env.FRONTEND_URL || "",
+].filter(Boolean);
+
+// En desarrollo, permitir orígenes locales para pruebas
+if (!isProd) {
+    allowedOrigins.push("http://localhost:4200", "http://localhost:4300");
+}
+
 app.use(
     cors({
-        origin: [
-            "http://localhost:4200",
-            "http://localhost:4300",
-            process.env.FRONTEND_URL || "", // 👈 Agrega esto
-        ].filter(Boolean), // 👈 Esto elimina valores vacíos
+        origin: allowedOrigins,
         credentials: true,
         methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
     }),

@@ -1,7 +1,24 @@
+import { timingSafeEqual } from "crypto";
 import { AppError } from "../utils/appError.js";
 import * as func from "../utils/funcionesGlobales.js";
 import type { IPayLoadToken } from "../types/IPayLoadToken.js";
 import type { IRequestToken } from "../types/IRequestToken.js";
+
+// Comparación de strings inmune a ataques de temporización (Timing Attack).
+// Siempre compara la longitud completa sin abortar en el primer caracter diferente.
+function comparacionSegura(a: string, b: string): boolean {
+    const bufA = Buffer.from(a);
+    const bufB = Buffer.from(b);
+
+    if (bufA.length !== bufB.length) {
+        // Comparamos contra sí mismo para consumir el mismo tiempo de CPU
+        // y no revelar la longitud esperada por diferencia de latencia.
+        timingSafeEqual(bufA, bufA);
+        return false;
+    }
+
+    return timingSafeEqual(bufA, bufB);
+}
 
 // ? LISTA: 17-09-2026
 export async function postTokenService(data: IRequestToken): Promise<string> {
@@ -13,8 +30,11 @@ export async function postTokenService(data: IRequestToken): Promise<string> {
         throw new AppError('Acceso Denegado. Error de configuración del servidor', 500, "service:postTokenService");
     }
 
-    // Compara directamente las credenciales enviadas por la App A
-    if (data.id_cliente.trim() !== validClientId || data.key.trim() !== validClientKey) {
+    // Comparación segura contra ataques de temporización (Timing Attack)
+    const idValido = comparacionSegura(data.id_cliente.trim(), validClientId);
+    const keyValida = comparacionSegura(data.key.trim(), validClientKey);
+
+    if (!idValido || !keyValida) {
         throw new AppError('Acceso Denegado. Credenciales Incorrectas', 401, "service:postTokenService");        
     }
 
@@ -28,4 +48,4 @@ export async function postTokenService(data: IRequestToken): Promise<string> {
     const accessToken = await func.GeneraToken(payLoadToken, "service:postTokenService");
 
     return accessToken;
-}
+}

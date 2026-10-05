@@ -2,12 +2,14 @@
   "name": "sigesp-backend",
   "version": "2.0.0",
   "description": "",
-  "main": "index.js",
+  "private": true,
+  "main": "dist/index.js",
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "prebuild": "node -e \"fs.rmSync('dist', { recursive: true, force: true })\"",
     "build": "tsc",
-    "start": "tsx src/index.ts"
+    "start": "node dist/index.js"
   },
   "keywords": [],
   "author": "Oscar L. Rodriguez",

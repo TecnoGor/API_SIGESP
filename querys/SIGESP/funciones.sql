@@ -360,7 +360,7 @@ AS $function$
 			LEFT JOIN soc_servicios s ON s.codser=d.coddetalle AND d.id_tipodetalle = 'SERVI' 
 			LEFT JOIN cxc_conceptofac c ON c.codconfac=d.coddetalle AND d.id_tipodetalle = 'CONCE'
 			LEFT JOIN api_integracion_documentos_fiscales idc ON idc.numfact = f.numfact AND idc.id_fact = f.id_fact AND idc.codtipdoc = 'FACTURA'
-			LEFT JOIN parametro p ON p.parametro_id = 1 AND p.fecha_cambio::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
+			LEFT JOIN parametro p ON p.codigo_iso = 'USD' AND p.fecha_cambio::date = (CURRENT_TIMESTAMP AT TIME ZONE 'America/Caracas')::date
 		WHERE  
 			f.codproceso='FACTURA' 
 		AND f.id_fact=prm_id_fact		
