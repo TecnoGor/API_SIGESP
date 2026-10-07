@@ -36,7 +36,6 @@ export async function postCargarDocumentosEnviadosService(codigo_usuario: string
         const query = 'SELECT fn_api_contingencia_documentos_fiscales_enviados($1::jsonb)';
         await poolSigesp.query(query, [JSON.stringify(payload)]);
         
-
         return;        
     } catch (error: any) {
         if (error instanceof AppError) {
