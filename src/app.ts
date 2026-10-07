@@ -7,6 +7,7 @@ import cors from "cors";
 import routes from "./routes/index.js";
 import { errorHandler } from "./middlewares/error.middleware.js";
 import { errorBodyHandler } from "./middlewares/errorBody.middleware.js";
+import { swaggerServe, swaggerSetup, openApiJson } from "./docs/swagger.js";
 
 // Inicializaciones
 const app = express();
@@ -41,6 +42,16 @@ app.use(express.urlencoded({ extended: false }));
 
 // Valida el cuerpo del Body
 app.use(errorBodyHandler);
+
+// 📚 Documentación Swagger (OpenAPI) - solo se expone la documentación, no modifica rutas existentes
+// helmet global aplica CSP que bloquea los assets de Swagger UI, por eso se desactiva solo en /api/docs
+app.get("/api/docs/openapi.json", openApiJson);
+app.use(
+    "/api/docs",
+    helmet({ contentSecurityPolicy: false }),
+    swaggerServe,
+    swaggerSetup,
+);
 
 app.use("/api", routes);
 
