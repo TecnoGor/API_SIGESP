@@ -224,3 +224,91 @@ export async function actualizarKeyRedis(
         console.log(`Fallo al intentar actualizar la clave ${key} en Redis.`);
     }
 }
+
+// =================================================================================================
+// 📌 [CAMBIO 1 - CENTRALIZACIÓN]: Extractor unificado de mensajes de la Imprenta Digital
+// FECHA: 22-10-2026
+// MOTIVO: Centralizar la extracción y normalización de respuestas de la imprenta digital
+//         para Facturación, Notas de Crédito y Retenciones (ISLR e IVA).
+//         Soporta:
+//         - Respuestas de error y rechazo en HTTP 200, 400, 401, 403, 409, 500 y 502+.
+//         - Formatos HTML/texto plano cuando el balanceador (Cloudflare/Nginx) responde error.
+//         - Formatos con arrays: "errors", "facturas_error", "invoice_errors".
+//         - Campos de mensaje en minúscula ("message") y mayúscula ("Mensaje" en retenciones).
+// =================================================================================================
+export function extraerMensajeImprenta(data: any): string {
+    if (!data) {
+        return "Respuesta vacía del proveedor";
+    }
+
+    // 1. Si el proveedor devuelve HTML (ej. Nginx/Cloudflare 502/504) o string directo
+    if (typeof data === "string") {
+        const textoLimpio = data.replace(/<[^>]*>?/gm, "").trim();
+        return textoLimpio.slice(0, 300) || "Error en formato texto/HTML del proveedor";
+    }
+
+    if (typeof data !== "object") {
+        return String(data).trim();
+    }
+
+    // 2. Array "errors": [{ message: "...", numeroFactura: "..." }] (CASO 4 Facturación / Errores con detalle)
+    if (Array.isArray(data.errors) && data.errors.length > 0) {
+        const mensajes = data.errors
+            .map((err: any) => {
+                if (typeof err === "object" && err !== null) {
+                    const msg = err.message ? String(err.message).trim() : JSON.stringify(err);
+                    const numFact = err.numeroFactura ? ` (Factura: ${err.numeroFactura})` : "";
+                    return `${msg}${numFact}`;
+                }
+                return String(err).trim();
+            })
+            .filter(Boolean);
+
+        if (mensajes.length > 0) {
+            return mensajes.join(" | ");
+        }
+    }
+
+    // 3. Campo principal de mensaje: "message" (minúscula) o "Mensaje" (mayúscula en éxito de retenciones)
+    let baseMsg = "";
+    if (typeof data.message === "string" && data.message.trim().length > 0) {
+        baseMsg = data.message.trim();
+    } else if (typeof data.Mensaje === "string" && data.Mensaje.trim().length > 0) {
+        baseMsg = data.Mensaje.trim();
+    }
+
+    // 4. Array "facturas_error": [{ numeroFactura: "...", cantidadProductos: 45, cantidadLineas: 45 }] (CASO 5 Facturación)
+    if (Array.isArray(data.facturas_error) && data.facturas_error.length > 0) {
+        const detalles = data.facturas_error
+            .map((item: any) => {
+                if (typeof item === "object" && item !== null) {
+                    const num = item.numeroFactura ? `Factura: ${item.numeroFactura}` : "";
+                    const prod = item.cantidadProductos ? `Productos: ${item.cantidadProductos}` : "";
+                    const lin = item.cantidadLineas ? `Líneas: ${item.cantidadLineas}` : "";
+                    const info = [num, prod, lin].filter(Boolean).join(" - ");
+                    return info ? `(${info})` : "";
+                }
+                return String(item);
+            })
+            .filter(Boolean);
+
+        if (detalles.length > 0) {
+            baseMsg = baseMsg ? `${baseMsg} ${detalles.join(", ")}` : `Errores en facturas: ${detalles.join(", ")}`;
+        }
+    }
+
+    // 5. Array "invoice_errors" (Strings, números u objetos) (CASOS 6 y 7 Facturación)
+    if (Array.isArray(data.invoice_errors) && data.invoice_errors.length > 0) {
+        const detalle = data.invoice_errors
+            .map((item: any) => (typeof item === "object" && item !== null ? JSON.stringify(item) : String(item).trim()))
+            .filter(Boolean)
+            .join(", ");
+
+        if (detalle.length > 0) {
+            baseMsg = baseMsg ? `${baseMsg} [Facturas: ${detalle}]` : `Error en facturas: ${detalle}`;
+        }
+    }
+
+    return baseMsg || "Error no especificado por la imprenta digital";
+}
+

@@ -26,7 +26,7 @@ CREATE TABLE public.api_integracion_documentos_fiscales (
 	id_fact int4 NOT NULL,
 	numfact int4 NOT NULL,
 	id_doc int4 NULL,
-	codtipdoc varchar(10) NOT NULL,
+	codtipdoc varchar(20) NOT NULL,
 	estado varchar(20) NOT NULL,
 	num_control varchar(25) NULL,
 	url_pdf text NULL,
@@ -39,6 +39,7 @@ CREATE TABLE public.api_integracion_documentos_fiscales (
 	CONSTRAINT pk_api_integracion_documentos_fiscales PRIMARY KEY (id)
 );
 CREATE UNIQUE INDEX idx_uniq_api_factura ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, numfact) WHERE ((codtipdoc)::text = 'FACTURA'::text);
+CREATE UNIQUE INDEX idx_uniq_api_nc_parcial ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC-PARCIAL'::text);
 CREATE UNIQUE INDEX idx_uniq_api_nota_credito ON public.api_integracion_documentos_fiscales USING btree (id_fact, codtipdoc, id_doc) WHERE ((codtipdoc)::text = 'NC'::text);
 
 
@@ -52,7 +53,7 @@ CREATE TABLE public.api_integracion_documentos_retenciones (
 	id int8 GENERATED ALWAYS AS IDENTITY( INCREMENT BY 1 MINVALUE 1 MAXVALUE 9223372036854775807 START 1 CACHE 1 NO CYCLE) NOT NULL,
 	numcom bpchar(15) NOT NULL,
 	numsol bpchar(15) NOT NULL,
-	codtipdoc varchar(10) NOT NULL,
+	codtipdoc varchar(20) NOT NULL,
 	estado varchar(20) NOT NULL,
 	num_control varchar(25) NULL,
 	url_pdf text NULL,
@@ -94,5 +95,5 @@ CREATE TABLE public.api_integracion_servicios (
 	coddetalle varchar(20) NOT NULL,
 	nombre varchar(254) NOT NULL,
 	codunimed varchar(4) NOT NULL,
-	CONSTRAINT pk_api_integracion_servicios PRIMARY KEY (servicio_id, coddetalle, nombre, codunimed)
+	CONSTRAINT pk_api_integracion_servicios PRIMARY KEY (servicio_id)
 );

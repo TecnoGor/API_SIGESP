@@ -40,7 +40,7 @@ export async function postCrearNCService(
         await func.verificaKeyRedis(documento, "service:postCrearNCService");
 
         // 👇 PASO 3. Busco los datos de la Nota de Credito
-        const query = "SELECT * FROM fn_api_get_nota_credito_detalle($1)";
+        const query = "SELECT * FROM fn_api_sigesp_get_nota_credito_detalle($1)";
         const result = await poolSigesp.query<INotaCreditoDetalle>(query, [
             id_doc,
         ]);
@@ -80,7 +80,7 @@ export async function postCrearNCService(
         }
 
         // 👇 PASO 5. Verifico si la FACTURA asociada a la Nota de Credito ya fue enviada anteriormente.
-        const queryVerificaFact = `SELECT public.fn_api_integracion_verifica_factura_enviada($1) AS enviada;`;
+        const queryVerificaFact = `SELECT public.fn_api_sigesp_get_verifica_factura_enviada($1) AS enviada;`;
 
         const respVerificaFact = await poolSigesp.query(queryVerificaFact, [
             id_fact,
@@ -110,12 +110,156 @@ export async function postCrearNCService(
         };
 
         // 👇 PASO 8. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
-        // No le pasamos headers, ni baseURL, ni Authorization.
-        // El interceptor hace todo eso antes de salir de tu backend.
-        const response = await apiExternaClient.post(
-            "/api/Invoice/add_credit_note",
-            payLoad,
-        );
+        let response: any;
+        try {
+            response = await apiExternaClient.post(
+                "/api/Invoice/add_credit_note",
+                payLoad,
+            );
+        } catch (httpError: any) {
+            // ======================================================================================
+            // 📌 [CAMBIO 3 - HOMOGENEIZACIÓN]: Clasificación y Registro Obligatorio en Redis para NC
+            // FECHA: 22-10-2026
+            // MOTIVO: Clasificar y persistir errores HTTP de la imprenta (400, 401, 500) en Notas de Crédito.
+            //         - RECHAZO (400/422): estatusEnvioRedis: 0 (Datos erróneos en la NC)
+            //         - ERROR (401/403/500/red): estatusEnvioRedis: -1 (Técnico / Reintentable)
+            // ======================================================================================
+            if (httpError instanceof AppError) {
+                if (httpError.statusCode === 400) {
+                    await func.actualizarKeyRedis(documento, {
+                        estatusEnvioRedis: 0,
+                        id_fact: id_fact ?? null,
+                        numfact: numfact ?? null,
+                        id_doc: id_doc,
+                        codtipdoc: "NC",
+                        estado: "RECHAZADO",
+                        num_control: null,
+                        url_pdf: null,
+                        observacion: httpError.message.trim(),
+                        codusu: (codigo_usuario ?? "").trim(),
+                        api_modulo: "SIGESP",
+                        api_id_origen: null,
+                    });
+                    throw httpError;
+                }
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] ${httpError.message.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] ${httpError.message.trim()}`, 500, "service:postCrearNCService");
+            }
+
+            const status = httpError?.response?.status;
+            const responseData = httpError?.response?.data;
+
+            // 1. CASO 2: Error 401/403 (Autenticación / JWT / Segmentos) -> ERROR TÉCNICO (500)
+            if (status === 401 || status === 403) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error de autenticación con la imprenta (HTTP ${status})`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error de autenticación (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error de autenticación con el proveedor (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCService");
+            }
+
+            // 2. CASO 1: Error 400/422 (Validación de negocio de la NC) -> RECHAZO (400)
+            if (status === 400 || status === 422) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || "Error de validación en la imprenta");
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: 0,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC",
+                    estado: "RECHAZADO",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `${errorMsg.trim()} ${prm_coddoc}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] ${errorMsg.trim()}`, 400, "service:postCrearNCService");
+            }
+
+            // 3. CASO 4: Error 500+ (Error interno en imprenta, ej. modelo admin) -> ERROR TÉCNICO (500)
+            if (status && status >= 500) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error del servidor HTTP ${status}`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error interno del proveedor (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error interno del proveedor (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCService");
+            }
+
+            // 4. Cualquier otro código 4xx -> ERROR TÉCNICO (500) preventivo
+            if (status && status >= 400 && status < 500) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error HTTP ${status}`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error HTTP inesperado (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error HTTP no esperado (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCService");
+            }
+
+            // 5. Error real de red, DNS o timeout -> ERROR TÉCNICO (500)
+            const redMsg = httpError?.message || "Fallo de comunicación con la imprenta";
+            await func.actualizarKeyRedis(documento, {
+                estatusEnvioRedis: -1,
+                id_fact: id_fact ?? null,
+                numfact: numfact ?? null,
+                id_doc: id_doc,
+                codtipdoc: "NC",
+                estado: "ERROR",
+                num_control: null,
+                url_pdf: null,
+                observacion: `[IMPRENTA] Error de red: ${redMsg}`,
+                codusu: (codigo_usuario ?? "").trim(),
+                api_modulo: "SIGESP",
+                api_id_origen: null,
+            });
+            throw new AppError(`[IMPRENTA] Error de red/infraestructura al contactar la imprenta: ${redMsg}`, 500, "service:postCrearNCService");
+        }
 
         // Validacion estricta de la respuesta
         const datosResp = response?.data;
@@ -133,11 +277,8 @@ export async function postCrearNCService(
             );
         }
 
-        // Validamos y obtengo la respuesta
-        const msgProveedor =
-            typeof datosResp.message === "string"
-                ? datosResp.message.trim()
-                : "Sin detalle del proveedor";
+        // Validamos y obtengo la respuesta unificada
+        const msgProveedor = func.extraerMensajeImprenta(datosResp);
 
         if (!datosResp.success) {
             const errorMsg = `${msgProveedor} ${prm_coddoc}`;
@@ -214,17 +355,18 @@ export async function postCrearNCService(
         // retornamos la respuesta
         return data;
     } catch (error: any) {
-        // ✅ Por aquí entran los errores lanzados con throw new AppError. Ya tiene statusCode y location
+        // ======================================================================================
+        // 📌 [CAMBIO 3 - HOMOGENEIZACIÓN]: Gestión del Catch Global para NC
+        // Los errores HTTP y de red de la imprenta digital ya fueron clasificados y persistidos en Redis
+        // en el bloque específico de la petición externa. Si es AppError, se relanza directamente.
+        // ======================================================================================
         if (error instanceof AppError) {
             throw error;
         }
 
-        // ✅ Por aquí entran los errores lanzados por la API externa (ej. 400)
+        // Respaldo de seguridad en caso de error HTTP no atrapado previamente
         if (error?.response?.data) {
-            const errorMessage = safeTrim(
-                error.response.data.message,
-                "Error en API externa",
-            );
+            const errorMessage = func.extraerMensajeImprenta(error.response.data);
 
             // 👇 REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {
@@ -315,7 +457,7 @@ export async function postCrearNCParcialService(
         );
 
         // 👇 PASO 3. Busco los datos de la Nota de Credito Parcial
-        const query = "SELECT * FROM fn_api_get_nota_credito_detalle($1)";
+        const query = "SELECT * FROM fn_api_sigesp_get_nota_credito_detalle($1)";
         const result = await poolSigesp.query<INotaCreditoDetalle>(query, [
             id_doc,
         ]);
@@ -355,7 +497,7 @@ export async function postCrearNCParcialService(
         }
 
         // 👇 PASO 5. Verifico si la FACTURA asociada a la Nota de Credito ya fue enviada anteriormente.
-        const queryVerificaFact = `SELECT public.fn_api_integracion_verifica_factura_enviada($1) AS enviada;`;
+        const queryVerificaFact = `SELECT public.fn_api_sigesp_get_verifica_factura_enviada($1) AS enviada;`;
         const respVerificaFact = await poolSigesp.query(queryVerificaFact, [
             id_fact,
         ]);
@@ -394,12 +536,156 @@ export async function postCrearNCParcialService(
         };
 
         // 👇 PASO 8. ✅ EJECUTAMOS LA PETICIÓN LIMPIA
-        // No le pasamos headers, ni baseURL, ni Authorization.
-        // El interceptor hace todo eso antes de salir de tu backend.
-        const response = await apiExternaClient.post(
-            "/api/Invoice/add_credit_note_with_products",
-            payLoad,
-        );
+        let response: any;
+        try {
+            response = await apiExternaClient.post(
+                "/api/Invoice/add_credit_note_with_products",
+                payLoad,
+            );
+        } catch (httpError: any) {
+            // ======================================================================================
+            // 📌 [CAMBIO 3 - HOMOGENEIZACIÓN]: Clasificación y Registro en Redis para NC Parcial
+            // FECHA: 22-10-2026
+            // MOTIVO: Clasificar y persistir errores HTTP de la imprenta (400, 401, 500) en NC Parciales.
+            //         - RECHAZO (400/422): estatusEnvioRedis: 0 (Datos erróneos en la NC parcial)
+            //         - ERROR (401/403/500/red): estatusEnvioRedis: -1 (Técnico / Reintentable)
+            // ======================================================================================
+            if (httpError instanceof AppError) {
+                if (httpError.statusCode === 400) {
+                    await func.actualizarKeyRedis(documento, {
+                        estatusEnvioRedis: 0,
+                        id_fact: id_fact ?? null,
+                        numfact: numfact ?? null,
+                        id_doc: id_doc,
+                        codtipdoc: "NC-PARCIAL",
+                        estado: "RECHAZADO",
+                        num_control: null,
+                        url_pdf: null,
+                        observacion: httpError.message.trim(),
+                        codusu: (codigo_usuario ?? "").trim(),
+                        api_modulo: "SIGESP",
+                        api_id_origen: null,
+                    });
+                    throw httpError;
+                }
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC-PARCIAL",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] ${httpError.message.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] ${httpError.message.trim()}`, 500, "service:postCrearNCParcialService");
+            }
+
+            const status = httpError?.response?.status;
+            const responseData = httpError?.response?.data;
+
+            // 1. CASO 2: Error 401/403 (Autenticación / JWT / Segmentos) -> ERROR TÉCNICO (500)
+            if (status === 401 || status === 403) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error de autenticación con la imprenta (HTTP ${status})`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC-PARCIAL",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error de autenticación (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error de autenticación con el proveedor (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCParcialService");
+            }
+
+            // 2. CASO 1: Error 400/422 (Validación de negocio de la NC) -> RECHAZO (400)
+            if (status === 400 || status === 422) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || "Error de validación en la imprenta");
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: 0,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC-PARCIAL",
+                    estado: "RECHAZADO",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `${errorMsg.trim()} ${prm_coddoc}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] ${errorMsg.trim()}`, 400, "service:postCrearNCParcialService");
+            }
+
+            // 3. CASO 4: Error 500+ (Error interno en imprenta, ej. modelo admin) -> ERROR TÉCNICO (500)
+            if (status && status >= 500) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error del servidor HTTP ${status}`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC-PARCIAL",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error interno del proveedor (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error interno del proveedor (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCParcialService");
+            }
+
+            // 4. Cualquier otro código 4xx -> ERROR TÉCNICO (500) preventivo
+            if (status && status >= 400 && status < 500) {
+                const errorMsg = responseData ? func.extraerMensajeImprenta(responseData) : (httpError?.message || `Error HTTP ${status}`);
+                await func.actualizarKeyRedis(documento, {
+                    estatusEnvioRedis: -1,
+                    id_fact: id_fact ?? null,
+                    numfact: numfact ?? null,
+                    id_doc: id_doc,
+                    codtipdoc: "NC-PARCIAL",
+                    estado: "ERROR",
+                    num_control: null,
+                    url_pdf: null,
+                    observacion: `[IMPRENTA] Error HTTP inesperado (${status}): ${errorMsg.trim()}`,
+                    codusu: (codigo_usuario ?? "").trim(),
+                    api_modulo: "SIGESP",
+                    api_id_origen: null,
+                });
+                throw new AppError(`[IMPRENTA] Error HTTP no esperado (${status}): ${errorMsg.trim()}`, 500, "service:postCrearNCParcialService");
+            }
+
+            // 5. Error real de red, DNS o timeout -> ERROR TÉCNICO (500)
+            const redMsg = httpError?.message || "Fallo de comunicación con la imprenta";
+            await func.actualizarKeyRedis(documento, {
+                estatusEnvioRedis: -1,
+                id_fact: id_fact ?? null,
+                numfact: numfact ?? null,
+                id_doc: id_doc,
+                codtipdoc: "NC-PARCIAL",
+                estado: "ERROR",
+                num_control: null,
+                url_pdf: null,
+                observacion: `[IMPRENTA] Error de red: ${redMsg}`,
+                codusu: (codigo_usuario ?? "").trim(),
+                api_modulo: "SIGESP",
+                api_id_origen: null,
+            });
+            throw new AppError(`[IMPRENTA] Error de red/infraestructura al contactar la imprenta: ${redMsg}`, 500, "service:postCrearNCParcialService");
+        }
 
         // Validacion estricta de la respuesta
         const datosResp = response?.data;
@@ -417,11 +703,8 @@ export async function postCrearNCParcialService(
             );
         }
 
-        // Validamos y obtengo la respuesta
-        const msgProveedor =
-            typeof datosResp.message === "string"
-                ? datosResp.message.trim()
-                : "Sin detalle del proveedor";
+        // Validamos y obtengo la respuesta unificada
+        const msgProveedor = func.extraerMensajeImprenta(datosResp);
 
         if (!datosResp.success) {
             const errorMsg = `${msgProveedor} ${prm_coddoc}`;
@@ -509,17 +792,18 @@ export async function postCrearNCParcialService(
         // retornamos la respuesta
         return data;
     } catch (error: any) {
-        // ✅ Por aquí entran los errores lanzados con throw new AppError. Ya tiene statusCode y location
+        // ======================================================================================
+        // 📌 [CAMBIO 3 - HOMOGENEIZACIÓN]: Gestión del Catch Global para NC Parcial
+        // Los errores HTTP y de red de la imprenta digital ya fueron clasificados y persistidos en Redis
+        // en el bloque específico de la petición externa. Si es AppError, se relanza directamente.
+        // ======================================================================================
         if (error instanceof AppError) {
             throw error;
         }
 
-        // ✅ Por aquí entran los errores lanzados por la API externa (ej. 400)
+        // Respaldo de seguridad en caso de error HTTP no atrapado previamente
         if (error?.response?.data) {
-            const errorMessage = safeTrim(
-                error.response.data.message,
-                "Error en API externa",
-            );
+            const errorMessage = func.extraerMensajeImprenta(error.response.data);
 
             // 👇 REDIS. Actualiza la clave del documento en Redis (RECHAZO)
             await func.actualizarKeyRedis(documento, {

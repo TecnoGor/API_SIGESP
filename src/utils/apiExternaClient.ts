@@ -35,6 +35,15 @@ const processQueue = (error: any, token: string | null = null) => {
     failedQueue = [];
 };
 
+// =================================================================================================
+// 📌 [CAMBIO 5 - BLINDAJE HTTP]: Protección del Interceptor y Obtención de Token
+// FECHA: 22-10-2026
+// MOTIVO: 
+// 1. Proteger originalRequest contra undefined en caídas tempranas de red/timeout.
+// 2. Controlar timeouts y errores 5xx del servicio de autenticación de la imprenta digital.
+// 3. Garantizar manejo determinista de colas ante concurrencia durante la renovación del token.
+// =================================================================================================
+
 // 2. Función aislada que pide y guarda el token
 async function obtenerYGuardarNuevoToken(): Promise<string> {
     const payLoad = {
@@ -42,26 +51,37 @@ async function obtenerYGuardarNuevoToken(): Promise<string> {
         userPassword: process.env.APP_API_CGI_PASSWORD
     };
     
-    // Usamos axios global para no entrar en bucle infinito
-    const response = await axios.post(
-        `${process.env.APP_API_CGI_URL}/api/Invoice/create_token_authenticator`, 
-        payLoad
-    );
+    try {
+        // Usamos axios global con timeout para no entrar en bucle infinito ni congelar hilos
+        const response = await axios.post(
+            `${process.env.APP_API_CGI_URL}/api/Invoice/create_token_authenticator`, 
+            payLoad,
+            { timeout: 12000 }
+        );
 
-    if (response.data.success && response.data.token) {
-        const newToken: string = response.data.token;
+        if (response?.data?.success && response?.data?.token) {
+            const newToken: string = response.data.token;
 
-        // Guardar en Redis con un tiempo de expiración preventivo (ex)
-        try {
-            await redis.set(REDIS_TOKEN_KEY, newToken, 'EX', TOKEN_TTL_SECONDS);
-        } catch (err) {
-            console.warn('⚠️ Fallo menor: No se pudo guardar el token en Redis:', err);
+            // Guardar en Redis con un tiempo de expiración preventivo
+            try {
+                await redis.set(REDIS_TOKEN_KEY, newToken, 'EX', TOKEN_TTL_SECONDS);
+            } catch (err) {
+                console.warn('⚠️ Fallo menor: No se pudo guardar el token en Redis:', err);
+            }
+
+            return newToken;
+        } 
+
+        const errorMsg = response?.data?.message?.trim() || "Respuesta no satisfactoria del autenticador";
+        throw new AppError(`❌ No se pudo obtener el token de la imprenta. ${errorMsg}`, 401, "interceptor:obtenerYGuardarNuevoToken");
+    } catch (authError: any) {
+        if (authError instanceof AppError) {
+            throw authError;
         }
 
-        return newToken;
-    } 
-
-    throw new AppError(`❌ No se pudo obtener el token. ${response.data.message?.trim() || ''}`, 401, "interceptor:obtenerYGuardarNuevoToken");
+        const detalle = authError?.response?.data?.message || authError?.message || "Fallo de conexión con servicio de token";
+        throw new AppError(`❌ Fallo crítico al autenticar con la imprenta digital: ${String(detalle).trim()}`, 401, "interceptor:obtenerYGuardarNuevoToken");
+    }
 }
 
 // --------------------------------------------------------
@@ -95,10 +115,10 @@ apiExternaClient.interceptors.request.use(async (config) => {
 apiExternaClient.interceptors.response.use(
     (response) => response, // 200 OK
     async (error) => {
-        const originalRequest = error.config;
+        const originalRequest = error?.config;
 
-        // Si dio 401 y la petición aún no ha sido reintentada
-        if (error.response?.status === 401 && !originalRequest._retry) {
+        // Si dio 401 y la petición es válida y aún no ha sido reintentada
+        if (error?.response?.status === 401 && originalRequest && !originalRequest._retry) {
             
             // Si ya hay un proceso de renovación de token activo, ponemos esta petición en cola
             if (isRefreshing) {
@@ -106,6 +126,7 @@ apiExternaClient.interceptors.response.use(
                     failedQueue.push({ resolve, reject });
                 })
                 .then((newToken) => {
+                    originalRequest.headers = originalRequest.headers || {};
                     originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
                     return apiExternaClient(originalRequest);
                 })
@@ -130,6 +151,7 @@ apiExternaClient.interceptors.response.use(
                 processQueue(null, newToken);
 
                 // 4. Reintentamos la petición original que dio error 401
+                originalRequest.headers = originalRequest.headers || {};
                 originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
                 return await apiExternaClient(originalRequest);
 
@@ -142,7 +164,7 @@ apiExternaClient.interceptors.response.use(
             }
         }
 
-        // Si es otro tipo de error (500, 404, etc.), lo arrojamos directamente
+        // Si es otro tipo de error (500, 404, etc.) o la petición no tiene config, lo arrojamos directamente
         throw error;
     }
 );

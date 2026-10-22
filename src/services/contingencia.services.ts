@@ -33,7 +33,7 @@ export async function postCargarDocumentosEnviadosService(codigo_usuario: string
             });
 
         // 4. ✅ - Ejecutamos la función enviando todo el lote en un solo parámetro JSONB
-        const query = 'SELECT fn_api_contingencia_documentos_fiscales_enviados($1::jsonb)';
+        const query = 'SELECT fn_api_sigesp_post_contingencia_documentos_fiscales_enviados($1::jsonb)';
         await poolSigesp.query(query, [JSON.stringify(payload)]);
         
         return;        
@@ -68,7 +68,7 @@ export async function postCargarCodigosRetencionIslrService(codigo_usuario: stri
         }));
 
         // 4. ✅ - Ejecutamos la función enviando todo el lote en un solo parámetro JSONB
-        const query = 'SELECT fn_api_contingencia_codigos_retenciones_islr($1::jsonb)';
+        const query = 'SELECT fn_api_sigesp_post_contingencia_codigos_retenciones_islr($1::jsonb)';
         await poolSigesp.query(query, [JSON.stringify(payload)]);
 
         return;
@@ -132,7 +132,7 @@ export async function postCargarCodigosRetencionIslrService(codigo_usuario: stri
 //     //         */
 
 //     //     // 4. ✅ - Ejecutamos la función enviando todo el lote en un solo parámetro JSONB
-//     //     const query = 'SELECT fn_api_contingencia_documentos_fiscales_enviados($1::jsonb)';
+//     //     const query = 'SELECT fn_api_sigesp_post_contingencia_documentos_fiscales_enviados($1::jsonb)';
 //     //     await poolSigesp.query(query, [JSON.stringify(payload)]);
         
 
